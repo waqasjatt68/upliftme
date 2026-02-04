@@ -1,0 +1,16 @@
+# Env
+.env
+.env.*
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# Temp / junk files
+New Text Document.txt
+
+# OS files
+.DS_Store
+Thumbs.db

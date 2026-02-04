@@ -1,0 +1,16 @@
+# Env files
+.env
+.env.*
+
+# Dependencies
+node_modules/
+
+# Production build
+dist/
+
+# Cache
+.vite/
+.eslintcache
+
+# Logs
+*.log
