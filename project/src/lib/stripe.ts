@@ -5,15 +5,15 @@ export async function createPaymentIntent(amount: number) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
-
+   
     // In development, simulate successful payment
-    if (import.meta.env.DEV) {
-      return {
-        clientSecret: 'test_secret',
-        amount,
-        currency: 'usd'
-      };
-    }
+    // if (import.meta.env.DEV) {
+    //   return {
+    //     clientSecret: 'test_secret',
+    //     amount,
+    //     currency: 'usd'
+    //   };
+    // }
 
     const { data, error } = await supabase.functions.invoke('create-payment-intent', {
       body: { amount }

@@ -5,19 +5,13 @@ import {
     getAllPayments,
     getPaymentByTransactionId,
     updatePaymentStatus,
-    deletePayment,
-    handleStripeWebhook
+    deletePayment
 } from "../controllers/paymentController.js";
 
 const router = express.Router();
 
 // Define routes
 router.post("/", createPaymentIntent); // Process a new payment
-router.post(
-  "/webhook",
-  bodyParser.raw({ type: "application/json" }),
-  handleStripeWebhook
-);
 router.get("/", getAllPayments); // Get all payments
 router.get("/:transactionId", getPaymentByTransactionId); // Get payment by transaction ID
 router.put("/:transactionId/status", updatePaymentStatus); // Update payment status

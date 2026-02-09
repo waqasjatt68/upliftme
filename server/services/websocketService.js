@@ -44,7 +44,7 @@ class CallConnection {
 const SocketSetup = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: [`https://www.upliftmee.com`],
+      origin: [`http://localhost:4000`],
       credentials: true,
       methods: ["GET", "POST"],
     },

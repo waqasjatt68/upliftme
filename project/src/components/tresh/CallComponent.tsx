@@ -823,7 +823,7 @@ const CallComponent: React.FC = () => {
   useEffect(() => {
     const fetchUserInfo = async () => {
       try {
-        const response = await fetch(`https://www.upliftmee.com/api/user/me`, {
+        const response = await fetch(`http://localhost:4000/api/user/me`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
           credentials: "include",

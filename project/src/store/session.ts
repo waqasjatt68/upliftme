@@ -41,6 +41,7 @@ interface PaymentInfo {
   uplifter_earnings?: number;
   platform_fee?: number;
 }
+export type Role = 'hero' | 'uplifter' | 'admin';
 
 interface SessionState {
   isActive: boolean;
@@ -50,7 +51,7 @@ interface SessionState {
   currentSession: Session | null;
   matchedUser: MatchedUser | null;
   isSearching: boolean;
-  currentRole: 'hero' | 'uplifter' | 'admin' | string;
+  currentRole: Role | null;
   rating: number;
   totalHeroDuration: number;
   dbId: string;
@@ -73,8 +74,12 @@ interface SessionState {
     hasWeeklySubscription: boolean;
     hasExtendedSubscription: boolean;
     sessionBalance: number;
+    specialKeyAccess:boolean; 
+    purchasedBundles: any[]|null;
+    weeklyExpiresAt:any|null;
   };
-  startSession: (role: 'hero' | 'uplifter') => Promise<void>;
+  // startSession: (role: 'hero' | 'uplifter') => Promise<void>;
+  startSession: () => Promise<void>;
   endSession: (rating?: number, payment?: PaymentInfo) => Promise<void>;
   cancelMatch: () => Promise<void>;
   initializeVideoCall: (container: HTMLElement) => Promise<any>;
@@ -96,7 +101,7 @@ const useSessionStore = create<SessionState>((set, get) => ({
   currentSession: null,
   matchedUser: null,
   isSearching: false,
-  currentRole: "",
+  currentRole: null,
   totalHeroDuration: 0,
   rating: 0,
   userStatus: '',
@@ -120,6 +125,9 @@ const useSessionStore = create<SessionState>((set, get) => ({
     hasWeeklySubscription: false,
     hasExtendedSubscription: false,
     sessionBalance: 0,
+    specialKeyAccess :false,
+    weeklyExpiresAt:null,
+    purchasedBundles: null,
   },
   toggleDevelopmentMode: () => {
     set(state => ({
@@ -138,178 +146,134 @@ const useSessionStore = create<SessionState>((set, get) => ({
     }
 
     try {
-      // // Use fetch with AbortController for timeout and cancelability
-      // const controller = new AbortController();
-      // const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-      // const response = await fetch(`/api/subscription`, {
-      //   method: 'GET',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Bearer ${localStorage.getItem('token')}` 
-      //   },
-      //   signal: controller.signal
-      // });
-
-      // clearTimeout(timeoutId);
-
-      // if (!response.ok) {
-      //   throw new Error('Failed to fetch subscription data');
-      // }
-
-      // const data = await response.json();
-
-      // if (data) {
-      //   set({
-      //     hasSubscription: data.hasSubscription,
-      //     sessionCredits: data.sessionCredits || 0
-      //   });
-      // }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        console.error('Subscription request timed out');
-      } else {
-        console.error('Failed to load subscription:', error);
-      }
-      // Set default values on error to prevent UI issues
-      set({ hasSubscription: false, sessionCredits: 0 });
-    }
-  },
-
-  checkSessionAvailability: async () => {
-    const { isDevelopment } = get();
-    if (isDevelopment) {
-      return { canStart: true, reason: 'development' };
-    }
-
-    try {
-      // Use fetch with AbortController for timeout and cancelability
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
       const response = await fetch(`http://localhost:4000/api/session-availability`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        signal: controller.signal
+        }
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error('Failed to check session availability');
-      }
+      if (!response.ok) throw new Error('Failed to fetch subscription');
 
       const data = await response.json();
 
-      if (!data) return { canStart: false, reason: 'no_user_data' };
+      // Update store with correct subscription info
+      set({
+        hasSubscription: data.canStart,
+        sessionCredits: data.sessionBalance || 0,
+        subscription: {
+          ...get().subscription,
+          sessionBalance: data.sessionBalance || 0,
+          hasWeeklySubscription: data.hasWeeklySubscription || false,
+          hasExtendedSubscription: data.hasExtendedSubscription || false,
+          specialKeyAccess: data.specialKeyAccess || false,
+          purchasedBundles: data.purchasedBundles || null,
+          weeklyExpiresAt: data.weeklyExpiresAt || null,
+        }
+      });
 
-      if (data.subscription_status === 'active') {
-        return { canStart: true };
-      }
-
-      if (data.sessions_remaining > 0) {
-        return { canStart: true, reason: 'free_trial' };
-      }
-
-      return { canStart: false, reason: 'no_subscription' };
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        console.error('Session availability request timed out');
-      } else {
-        console.error('Failed to check session availability:', error);
-      }
-      return { canStart: false, reason: 'error' };
+    } catch (err) {
+      console.error('Failed to load subscription:', err);
+      set({ hasSubscription: false, sessionCredits: 0 });
     }
   },
 
-  startSession: async (role: 'hero' | 'uplifter') => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+  checkSessionAvailability: async () => {
+    const { isDevelopment, subscription } = get();
 
-      // console.log('🔍 Starting match search for role:', role);
-      set({ isSearching: true, currentRole: role });
-
-      // Update user's role - use upsert for better reliability
-      const { error: updateError } = await supabase
-        .from('users')
-        .upsert({
-          id: user.id,
-          role,
-          last_active: new Date().toISOString()
-        }, {
-          onConflict: 'id'
-        });
-
-      if (updateError) throw updateError;
-
-      // Clean up any existing presence first
-      await cleanupPresence();
-
-      // Add a shorter delay - 500ms should be sufficient
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Use async/await pattern for match handling
-      const match = await findMatch(role);
-      if (match) {
-        // console.log('🎯 Direct match found:', match);
-        await handleMatchFound(match);
-      } else {
-        // console.log('⏳ No immediate match, polling started');
-        toast.info('Searching for a match...', {
-          description: 'Please wait while we find someone to connect with.',
-          duration: 10000 // Add duration for better UX
-        });
-      }
-
-    } catch (error) {
-      await cleanupPresence(); // Clean up presence on error
-      set({ isSearching: false, matchedUser: null });
-      console.error('Failed to start session:', error);
-      toast.error('Failed to start session. Please try again.', {
-        duration: 5000 // Add duration for better UX
-      });
-      throw error;
+    if (isDevelopment) {
+      return { canStart: true, reason: 'development' };
     }
 
-    // Define the match handling function within the context to avoid issues
+    // Use the latest subscription info from store
+    if (subscription.sessionBalance > 0 || subscription.hasWeeklySubscription || subscription.hasExtendedSubscription) {
+      return { canStart: true, reason: 'active_subscription' };
+    }
+
+    return { canStart: false, reason: 'no_subscription' };
+  },
+  
+  startSession: async () => {
+    const role = get().currentRole;
+
+    if (!role || (role !== 'hero' && role !== 'uplifter')) {
+      toast.error('Invalid role. Please select hero or uplifter.');
+      return;
+    }
+
+    set({ isSearching: true });
+
+    try {
+      // 1️⃣ Get current user
+      const res = await fetch("/api/user/me", { credentials: "include" });
+    if (!res.ok) throw new Error("Not authenticated");
+    const user = await res.json();
+
+      // 4️⃣ Cleanup any previous presence
+      await cleanupPresence();
+
+      // 5️⃣ Wait a short delay to ensure presence is registered
+      await new Promise(res => setTimeout(res, 500));
+
+      // 6️⃣ Retry findMatch for up to 10 seconds
+      let match: MatchedUser | null = null;
+      const startTime = Date.now();
+      const timeout = 10000; // 10s
+      const retryDelay = 500; // 0.5s
+
+      while (!match && Date.now() - startTime < timeout) {
+        match = await findMatch(role);
+        if (!match) await new Promise(res => setTimeout(res, retryDelay));
+      }
+
+      if (!match) {
+        toast.error('Failed to find a match. Please try again.');
+        set({ isSearching: false });
+        return;
+      }
+
+      // 7️⃣ Handle match found
+      await handleMatchFound(match);
+
+    } catch (error) {
+      console.error('Failed to start session:', error);
+      toast.error('Failed to start session. Please try again.');
+      set({ isSearching: false });
+    }
+
+    // ----- Inner function for handling the match -----
     async function handleMatchFound(match: MatchedUser) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // console.log('✨ Match found:', match);
       set({ matchedUser: match });
 
-      // Create session record
+      // Create session record in Supabase
       const { data: session, error: sessionError } = await supabase
         .from('sessions')
         .insert({
           hero_id: role === 'hero' ? user.id : match.matched_user_id,
           uplifter_id: role === 'uplifter' ? user.id : match.matched_user_id,
           status: 'active',
-          started_at: new Date().toISOString()
+          started_at: new Date().toISOString(),
         })
         .select('*, uplifter:uplifter_id(username)')
         .single();
 
       if (sessionError) throw sessionError;
 
-      // console.log('✅ Session created:', session);
-      toast.success('Match found! Starting session...', {
-        duration: 5000 // Add duration for better UX
-      });
+      toast.success('Match found! Starting session...', { duration: 5000 });
 
       set({
         isActive: true,
-        timeRemaining: 7 * 60,
+        timeRemaining: 7 * 60, // 7 minutes
         currentSession: session,
-        isSearching: false
+        isSearching: false,
       });
     }
   },
+
 
   initializeVideoCall: async (container: HTMLElement) => {
     const { currentSession } = get();

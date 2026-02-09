@@ -18,7 +18,9 @@ import { AccessToken } from 'livekit-server-sdk'
 import  verifySubscription  from "./middlewares/verifySubscription.middleware.js"; // Adjust the path as needed
 const apiKey = 'APItSDnBLzLn8Y4'; // Use your real API Key
 const apiSecret = 'BUT9ZQcHHWKto2YZjm7Wb4xiVbmhYfs0zc3dCvRdfRF'; // Use your real API Secret
-
+import {
+    handleStripeWebhook
+} from "./controllers/paymentController.js";
 
 dotenv.config();
 
@@ -26,7 +28,11 @@ dotenv.config();
 const app = express();
 const server = createServer(app);
 
-
+app.post(
+  "/api/payments/webhook",
+  bodyParser.raw({ type: "application/json" }),
+  handleStripeWebhook
+);
 
 SocketSetup(server, { 
   cors: { 
@@ -46,9 +52,10 @@ app.use(cors({
 }));
 app.use("/api/verifyhook/webhook", bodyParser.raw({ type: "application/json" }));
 app.use("/api/verifyhook",((req, res,next)=>{
-// console.log("verifyhook middleware called");
-  next();
+  console.log("verifyhook middleware called");
+  next()
 }), paymentRoutes);
+app.post("/api/payments/webhook", bodyParser.raw({type: "application/json"}), handleStripeWebhook);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

@@ -29,6 +29,7 @@ const Counter: React.FC = () => {
         profilePicture:profilePicture,
     })
   },[currentRole,rating])
+
   useEffect(()=>{
     socket.on("usersList", (data) => {
         // Handle the user registered event

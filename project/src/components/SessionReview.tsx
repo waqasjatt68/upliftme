@@ -7,7 +7,8 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { loadStripe } from '@stripe/stripe-js';
 import EmotionalSlider from './EmotionalSlider';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+const stripePromise = loadStripe("pk_test_51SwzBiRt8kNCRZHOHRXHk8II9rDSpPxwrGnSkWzBzoqSWSvBjPlVSZAZj4g5hCrx9pjLZCsHBypxXBWElnrdKXsf00CLuudVg3");
+
 
 interface SessionReviewProps {
   uplifterName: string;

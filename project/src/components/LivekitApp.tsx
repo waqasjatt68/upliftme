@@ -38,7 +38,7 @@ export default function LiveKitApp() {
     const connect = async () => {
       if (!identity) return; // Wait until identity is set
 
-      const response = await fetch('https://www.upliftmee.com/api/token', {
+      const response = await fetch('http://localhost:4000/api/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -24,35 +24,26 @@ cloudinary.config({
  * returns {Promise<string>} - The Cloudinary URL of the uploaded image.
  */
 const uploadToCloudinary = async (imageName) => {
-    try {
-        const imagePath = path.join(__dirname, '../public/temp/', imageName);
+  try {
+    const imagePath = path.join(__dirname, '../public/temp/', imageName);
 
-        // Check if the file exists
-        try {
-            await fs.access(imagePath);
-        } catch {
-            throw new Error(`File "${imageName}" not found in ../public/temp/`);
-        }
+    // Check file exists
+    await fs.access(imagePath);
 
-        // Upload the image to Cloudinary
-        const uploadResult = await cloudinary.uploader.upload(imagePath, {
-            folder: 'upliftme/temp', // Optional: Upload to a specific folder
-            use_filename: true, 
-            unique_filename: false,
-        });
+    const uploadResult = await cloudinary.uploader.upload(imagePath, {
+      folder: 'upliftme/avatars',
+      public_id: `avatar_${Date.now()}`, // ✅ FORCE NEW FILE
+      overwrite: true,
+      resource_type: 'image'
+    });
 
-        // Remove the local file after upload (Async)
-        fs.unlink(imagePath)
-            .then(() => console.log(`Deleted local file: ${imagePath}`))
-            .catch((err) => console.error(`Error deleting file: ${err.message}`));
+    // delete temp file
+    await fs.unlink(imagePath);
 
-       
-        return uploadResult.secure_url;
-
-    } catch (error) {
-        
-        throw error;
-    }
+    return uploadResult.secure_url;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export default uploadToCloudinary;

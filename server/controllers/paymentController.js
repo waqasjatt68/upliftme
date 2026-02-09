@@ -3,12 +3,8 @@ import User from "../models/user.model.js";
 import Stripe from "stripe";
 import Subscription from "../models/subscription.model.js";
 import {PLAN_CONFIG} from "../constants.js"; 
-const endpointSecret = "whsec_098df4e5a246b228cde620c40703597d3c0de659064e674522b262da1d179de9"; // Replace with your actual endpoint secret | account => acct_1RVskMP3JnQ5yfeS 
-// const endpointSecret = "whsec_mOive4XslvgYwfXGO8m86BmgOgcyfA6x";
-// const endpointSecret = "whsec_2a7565760e1ca02271e18ff32d181ae3b639b316ae56a8fa0ea3fc212e96b3fd";
-
-// const stripe = new Stripe('sk_test_51RNGiJ2VGmPWWxlEP4XyHg6DtfFs4o7ARLeoqfnN7cGbpmbxkxHwSDwhT5ZAUAcptZIuGtfJOb5xrAN3TV1fQTcR00nahC4jbq');
-const stripe = new Stripe('sk_test_51RVskg08FimtfFFhIKtw9m3Yonb9uy22vxLy6xdMC2sgYP2tf05gANu5Gc369E4gvbM3TxJwBUHP3c7V8QIoHM0f00XQTz0Psu');
+const endpointSecret = "whsec_720be1689a54e9df386b10b55440a16781463389f9d079cae7acf86b07a6eb39"; // Replace with your actual endpoint secret | account => acct_1RVskMP3JnQ5yfeS 
+const stripe = new Stripe('sk_test_51SwzBiRt8kNCRZHO9ndJgacR1AJQXjhQeMSOYcOXflzBDiGOtLTxHgcexQzVAQEKvjYexrDVlWLpsZyX3vlanZOH00Kn1vrJv1');
 
 // Process a new payment using Stripe
 // import Subscription from "../models/Subscription.js";
@@ -147,11 +143,15 @@ export const createPaymentIntent = async (req, res) => {
 // Get all payments
 
 export const handleStripeWebhook = async (req, res) => {
+  console.log("🚨🚨🚨 WEBHOOK CALLED! 🚨🚨🚨"); // YE LINE ADD KARO
+  console.log("📅 Time:", new Date().toLocaleString());
   const sig = req.headers["stripe-signature"];
   let event;
+  
 
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+
   } catch (err) {
     console.error("❌ Webhook signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -160,17 +160,36 @@ export const handleStripeWebhook = async (req, res) => {
   if (event.type === "payment_intent.succeeded") {
     const paymentIntent = event.data.object;
     console.log("✅ PaymentIntent was successful!", paymentIntent);
+    // 🧾 Save payment record
+    // const paymentExists = await Payment.findOne({
+    //   transactionId: paymentIntent.id,
+    // });
+
+    // if (paymentExists) {
+    //   await Payment.create({
+    //     userId: paymentIntent.metadata.userId,
+    //     transactionId: paymentIntent.id,
+    //     amount: paymentIntent.amount_received / 100,
+    //     currency: paymentIntent.currency,
+    //     status: paymentIntent.status, // succeeded
+    //     planType: paymentIntent.metadata.planType,
+    //     paymentMethod: paymentIntent.payment_method_types?.[0] || "card"
+    //   });
+
+    //   console.log("💾 Payment saved in database");
+    // } else {
+    //   console.log("⚠️ Payment already exists, skipping duplicate save");
+    // }
+
 
     const userId = paymentIntent.metadata.userId;
     const planType = paymentIntent.metadata.planType;
     const bundleSize = parseInt(paymentIntent.metadata.bundleSize || "0");
     const amountPaid = paymentIntent.amount_received / 100;
 
-    // console.log(planType, bundleSize);
-
     try {
       const existingSub = await Subscription.findOne({ userId });
-
+      
       // First-time subscription
       if (!existingSub) {
         if (planType === "extended") {
@@ -196,8 +215,17 @@ export const handleStripeWebhook = async (req, res) => {
             },
           ],
         });
+        
 
         await newSub.save();
+        await User.findByIdAndUpdate(userId, {
+          $set: {
+            "subscription.sessionBalance": newSub.sessionBalance,
+            "subscription.specialKeyAccess": newSub.hasExtendedSubscription || false,
+            "subscription.purchasedBundles": newSub.purchasedBundles
+          }
+        });
+
         console.log("🆕 Created new subscription:", newSub);
         return res.status(200).json({ message: "Subscription created successfully" });
       }
@@ -243,6 +271,14 @@ export const handleStripeWebhook = async (req, res) => {
         updateFields,
         { upsert: true, new: true }
       );
+      await User.findByIdAndUpdate(userId, {
+        $set: {
+          "subscription.sessionBalance": updatedSub.sessionBalance,
+          "subscription.specialKeyAccess": updatedSub.hasExtendedSubscription || false,
+          "subscription.purchasedBundles": updatedSub.purchasedBundles
+        }
+      });
+
 
       console.log("🔄 Updated subscription:", updatedSub);
       return res.status(200).json({ message: "Subscription updated successfully" });
@@ -270,6 +306,7 @@ export const getAllPayments = async (req, res) => {
 export const getPaymentByTransactionId = async (req, res) => {
     try {
         const payment = await Payment.findOne({ transactionId: req.params.transactionId }).populate("userId");
+        
         if (!payment) {
             return res.status(404).json({ message: "Payment not found." });
         }

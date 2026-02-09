@@ -1,232 +1,436 @@
-import { supabase } from './supabase';
-import { toast } from 'sonner';
+// import { supabase } from "./supabase";
+// import { toast } from "sonner";
+
+// export interface MatchedUser {
+//   matched_user_id: string;
+//   match_score: number;
+//   username: string;
+//   avatar_url: string;
+//   bio: string;
+// }
+
+// interface MatchRow {
+//   matched_user_id: string;
+//   match_score: number;
+//   username: string;
+// }
+
+// // Keep track of polling interval
+// let matchPollingInterval: NodeJS.Timeout | null = null;
+
+// // Enhanced logging for matching operations
+// const logMatchingEvent = async (event: string, details: any) => {
+//   try {
+//     const {
+//       data: { user },
+//     } = await supabase.auth.getUser();
+//     if (!user) return;
+
+//     await supabase.from("matching_presence_logs").insert({
+//       event_type: `matching_${event}`,
+//       user_id: user.id,
+//       details: {
+//         timestamp: new Date().toISOString(),
+//         ...details,
+//       },
+//     });
+
+//     console.log(`🔄 Matching Event [${event}]:`, details);
+//   } catch (error) {
+//     console.error("Failed to log matching event:", error);
+//   }
+// };
+
+// export async function findMatch(
+//   role: "hero" | "uplifter",
+// ): Promise<MatchedUser | null> {
+//   try {
+//     const {
+//       data: { user },
+//     } = await supabase.auth.getUser();
+//     if (!user) throw new Error("Not authenticated");
+
+//     await logMatchingEvent("search_start", {
+//       role,
+//       userId: user.id,
+//     });
+
+//     // First ensure user's role is set in users table
+//     const { error: roleError } = await supabase
+//       .from("users")
+//       .update({ role })
+//       .eq("id", user.id);
+
+//     if (roleError) {
+//       await logMatchingEvent("role_update_error", { error: roleError });
+//       throw roleError;
+//     }
+
+//         // ✅ Register user as searching
+//     const { error: presenceError } = await supabase
+//       .from("matching_presence")
+//       .upsert({
+//         user_id: user.id,
+//         role,
+//         status: "searching",
+//         last_seen: new Date().toISOString(),
+//       });
+
+//     if (presenceError) {
+//       await logMatchingEvent("presence_insert_error", { error: presenceError });
+//       throw presenceError;
+//     }
+
+
+//     // Clean up any existing presence
+//     // await cleanupPresence();
+
+//     // // Add a delay to ensure cleanup is complete
+//     // await new Promise((resolve) => setTimeout(resolve, 1000));
+
+//     await logMatchingEvent("presence_cleanup_complete", {
+//       userId: user.id,
+//     });
+
+//     // Call the Supabase function to find a match
+//     const { data, error: matchError } = await supabase.rpc(
+//       "find_active_match",
+//       { search_user_id: user.id, search_role: role }
+//     );
+
+//     const matches = data as MatchRow[] | null;
+
+
+//     if (matchError) {
+//       await logMatchingEvent("match_query_error", { error: matchError });
+//       throw matchError;
+//     }
+
+//     await logMatchingEvent("potential_matches", {
+//       count: matches?.length || 0,
+//       matches: matches?.map((m) => ({
+//         id: m.matched_user_id,
+//         username: m.username,
+//         score: m.match_score,
+//       })),
+//     });
+
+//     if (!matches || matches.length === 0) {
+//       await logMatchingEvent("no_immediate_match", {
+//         userId: user.id,
+//         role,
+//       });
+//       startPolling(user.id, role);
+//       return null;
+//     }
+
+//     const match = matches[0];
+//     if (!match) return null;
+
+//     // Double-check match is still available
+//     const { data: matchPresence } = await supabase
+//       .from("matching_presence")
+//       .select("status, role")
+//       .eq("user_id", match.matched_user_id)
+//       .single();
+
+//     if (!matchPresence || matchPresence.status !== "searching") {
+//       await logMatchingEvent("match_no_longer_available", {
+//         matchId: match.matched_user_id,
+//         status: matchPresence?.status,
+//         role: matchPresence?.role,
+//       });
+//       return null;
+//     }
+
+//     await logMatchingEvent("match_established", {
+//       user1: {
+//         id: user.id,
+//         role: role,
+//       },
+//       user2: {
+//         id: match.matched_user_id,
+//         username: match.username,
+//         role: matchPresence.role,
+//       },
+//     });
+
+//     stopPolling();
+//     return match;
+//   } catch (error) {
+//     const message =
+//       error instanceof Error ? error.message : "Unknown error";
+
+//     await logMatchingEvent("error", { error: message });
+//   }
+
+//     await cleanupPresence();
+//     stopPolling();
+//     toast.error("Failed to find match. Please try again.");
+//     return null;
+//   }
+// }
+
+// function startPolling(userId: string, role: string) {
+//   stopPolling();
+
+//   console.log("⏱️ Starting match polling:", {
+//     userId,
+//     role,
+//     timestamp: new Date().toISOString(),
+//   });
+
+//   matchPollingInterval = setInterval(async () => {
+//     try {
+//       // Call the Supabase function to find a match
+//       const { data: matches, error: matchError } = await supabase.rpc(
+//         "find_active_match",
+//         {
+//           search_user_id: userId,
+//           search_role: role,
+//         },
+//       );
+
+//       if (matchError) throw matchError;
+
+//       if (matches && matches.length > 0) {
+//         const match = matches[0];
+
+//         // Double-check match is still available
+//         const { data: matchPresence } = await supabase
+//           .from("matching_presence")
+//           .select("status, role")
+//           .eq("user_id", match.matched_user_id)
+//           .single();
+
+//         if (!matchPresence || matchPresence.status !== "searching") {
+//           await logMatchingEvent("polling_match_unavailable", {
+//             matchId: match.matched_user_id,
+//             status: matchPresence?.status,
+//           });
+//           return;
+//         }
+
+//         await logMatchingEvent("polling_match_found", {
+//           matchId: match.matched_user_id,
+//           username: match.username,
+//         });
+
+//         // Trigger match found event
+//         const event = new CustomEvent("matchFound", {
+//           detail: match,
+//         });
+//         window.dispatchEvent(event);
+//         stopPolling();
+//       }
+//     } catch (error) {
+//       await logMatchingEvent("polling_error", { error: error.message });
+//     }
+//   }, 2000);
+// }
+
+// function stopPolling() {
+//   if (matchPollingInterval) {
+//     clearInterval(matchPollingInterval);
+//     matchPollingInterval = null;
+//     console.log("⏹️ Stopped match polling:", {
+//       timestamp: new Date().toISOString(),
+//     });
+//   }
+// }
+
+// export async function cleanupPresence() {
+//   try {
+//     const {
+//       data: { user },
+//     } = await supabase.auth.getUser();
+//     if (!user) return;
+
+//     await logMatchingEvent("cleanup_start", {
+//       userId: user.id,
+//     });
+
+//     // Delete existing presence record
+//     const { error } = await supabase
+//       .from("matching_presence")
+//       .delete()
+//       .eq("user_id", user.id);
+
+//     if (error) {
+//       await logMatchingEvent("cleanup_error", { error: error.message });
+//       throw error;
+//     }
+
+//     await logMatchingEvent("cleanup_complete", {
+//       userId: user.id,
+//     });
+//   } catch (error) {
+//     await logMatchingEvent("cleanup_error", { error: error.message });
+//   }
+// }
+
+
+import { supabase } from "./supabase";
+import { toast } from "sonner";
+
+/* ===================== TYPES ===================== */
 
 export interface MatchedUser {
   matched_user_id: string;
   match_score: number;
   username: string;
-  avatar_url: string;
-  bio: string;
+  avatar_url: string | null;
+  bio: string | null;
 }
 
-// Keep track of polling interval
-let matchPollingInterval: NodeJS.Timeout | null = null;
+interface MatchRPCRow {
+  matched_user_id: string;
+  match_score: number;
+  username: string;
+  avatar_url: string | null;
+  bio: string | null;
+}
 
-// Enhanced logging for matching operations
-const logMatchingEvent = async (event: string, details: any) => {
+/* ===================== POLLING ===================== */
+
+let pollingInterval: ReturnType<typeof setInterval> | null = null;
+
+/* ===================== LOGGER ===================== */
+
+async function logMatchingEvent(
+  event: string,
+  details: Record<string, unknown>
+) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) return;
 
-    await supabase.from('matching_presence_logs').insert({
-      event_type: `matching_${event}`,
+    await supabase.from("matching_logs").insert({
       user_id: user.id,
-      details: {
-        timestamp: new Date().toISOString(),
-        ...details
-      }
+      event,
+      details,
+      created_at: new Date().toISOString(),
     });
-
-    console.log(`🔄 Matching Event [${event}]:`, details);
-  } catch (error) {
-    console.error('Failed to log matching event:', error);
+  } catch {
+    // intentionally silent
   }
-};
+}
 
-export async function findMatch(role: 'hero' | 'uplifter'): Promise<MatchedUser | null> {
+/* ===================== MATCH FINDER ===================== */
+
+export async function findMatch(
+  role: "hero" | "uplifter"
+): Promise<MatchedUser | null> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    await logMatchingEvent('search_start', { 
-      role, 
-      userId: user.id
-    });
+    if (!user) throw new Error("User not authenticated");
 
-    // First ensure user's role is set in users table
-    const { error: roleError } = await supabase
-      .from('users')
-      .update({ role })
-      .eq('id', user.id);
+    await logMatchingEvent("search_start", { role });
 
-    if (roleError) {
-      await logMatchingEvent('role_update_error', { error: roleError });
-      throw roleError;
-    }
-
-    // Clean up any existing presence
     await cleanupPresence();
 
-    // Add a delay to ensure cleanup is complete
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    await logMatchingEvent('presence_cleanup_complete', {
-      userId: user.id
+    const { data, error } = await supabase.rpc("find_active_match", {
+      search_user_id: user.id,
+      search_role: role,
     });
 
-    // Call the Supabase function to find a match
-    const { data: matches, error: matchError } = await supabase
-      .rpc('find_active_match', {
-        search_user_id: user.id,
-        search_role: role
-      });
+    if (error) throw error;
 
-    if (matchError) {
-      await logMatchingEvent('match_query_error', { error: matchError });
-      throw matchError;
-    }
-
-    await logMatchingEvent('potential_matches', {
-      count: matches?.length || 0,
-      matches: matches?.map(m => ({
-        id: m.matched_user_id,
-        username: m.username,
-        score: m.match_score
-      }))
-    });
+    const matches = data as MatchRPCRow[] | null;
 
     if (!matches || matches.length === 0) {
-      await logMatchingEvent('no_immediate_match', {
-        userId: user.id,
-        role
-      });
       startPolling(user.id, role);
       return null;
     }
 
     const match = matches[0];
-    if (!match) return null;
 
-    // Double-check match is still available
-    const { data: matchPresence } = await supabase
-      .from('matching_presence')
-      .select('status, role')
-      .eq('user_id', match.matched_user_id)
-      .single();
-
-    if (!matchPresence || matchPresence.status !== 'searching') {
-      await logMatchingEvent('match_no_longer_available', {
-        matchId: match.matched_user_id,
-        status: matchPresence?.status,
-        role: matchPresence?.role
-      });
-      return null;
-    }
-
-    await logMatchingEvent('match_established', {
-      user1: {
-        id: user.id,
-        role: role
-      },
-      user2: {
-        id: match.matched_user_id,
-        username: match.username,
-        role: matchPresence.role
-      }
+    await logMatchingEvent("match_found", {
+      matched_user_id: match.matched_user_id,
+      score: match.match_score,
     });
 
     stopPolling();
     return match;
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Unknown matching error";
 
-  } catch (error) {
-    await logMatchingEvent('error', { error: error.message });
+    await logMatchingEvent("error", { error: message });
     await cleanupPresence();
     stopPolling();
-    toast.error('Failed to find match. Please try again.');
+    toast.error("Failed to find match");
+
     return null;
   }
 }
 
-function startPolling(userId: string, role: string) {
+/* ===================== POLLING ===================== */
+
+function startPolling(userId: string, role: "hero" | "uplifter") {
   stopPolling();
 
-  console.log('⏱️ Starting match polling:', {
-    userId,
-    role,
-    timestamp: new Date().toISOString()
-  });
-
-  matchPollingInterval = setInterval(async () => {
+  pollingInterval = setInterval(async () => {
     try {
-      // Call the Supabase function to find a match
-      const { data: matches, error: matchError } = await supabase
-        .rpc('find_active_match', {
-          search_user_id: userId,
-          search_role: role
-        });
+      const { data, error } = await supabase.rpc("find_active_match", {
+        search_user_id: userId,
+        search_role: role,
+      });
 
-      if (matchError) throw matchError;
+      if (error) throw error;
+
+      const matches = data as MatchRPCRow[] | null;
 
       if (matches && matches.length > 0) {
         const match = matches[0];
 
-        // Double-check match is still available
-        const { data: matchPresence } = await supabase
-          .from('matching_presence')
-          .select('status, role')
-          .eq('user_id', match.matched_user_id)
-          .single();
-
-        if (!matchPresence || matchPresence.status !== 'searching') {
-          await logMatchingEvent('polling_match_unavailable', {
-            matchId: match.matched_user_id,
-            status: matchPresence?.status
-          });
-          return;
-        }
-
-        await logMatchingEvent('polling_match_found', {
-          matchId: match.matched_user_id,
-          username: match.username
+        const event = new CustomEvent<MatchedUser>("matchFound", {
+          detail: match,
         });
 
-        // Trigger match found event
-        const event = new CustomEvent('matchFound', { 
-          detail: match
-        });
         window.dispatchEvent(event);
         stopPolling();
       }
-    } catch (error) {
-      await logMatchingEvent('polling_error', { error: error.message });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Polling error";
+
+      await logMatchingEvent("polling_error", { error: message });
     }
   }, 2000);
 }
 
 function stopPolling() {
-  if (matchPollingInterval) {
-    clearInterval(matchPollingInterval);
-    matchPollingInterval = null;
-    console.log('⏹️ Stopped match polling:', {
-      timestamp: new Date().toISOString()
-    });
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
   }
 }
 
+/* ===================== CLEANUP ===================== */
+
 export async function cleanupPresence() {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) return;
 
-    await logMatchingEvent('cleanup_start', {
-      userId: user.id
-    });
-
-    // Delete existing presence record
-    const { error } = await supabase
-      .from('matching_presence')
+    await supabase
+      .from("matching_presence")
       .delete()
-      .eq('user_id', user.id);
+      .eq("user_id", user.id);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Cleanup error";
 
-    if (error) {
-      await logMatchingEvent('cleanup_error', { error: error.message });
-      throw error;
-    }
-
-    await logMatchingEvent('cleanup_complete', {
-      userId: user.id
-    });
-  } catch (error) {
-    await logMatchingEvent('cleanup_error', { error: error.message });
+    await logMatchingEvent("cleanup_error", { error: message });
   }
 }

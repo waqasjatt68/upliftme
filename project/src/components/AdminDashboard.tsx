@@ -58,7 +58,7 @@ const AdminDashboard: React.FC = () => {
 
   const loadStats = async () => {
     try {
-      const response = await fetch("https://www.upliftmee.com/api/admin/deshboardStats", {
+      const response = await fetch("http://localhost:4000/api/admin/deshboardStats", {
         method: "GET",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

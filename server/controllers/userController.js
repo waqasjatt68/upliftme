@@ -171,61 +171,73 @@ export const getUserProfile = async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-        res.json({ id: user._id, email: user.email, status: user.status, username: user.userName, avatar: user.profile.avatar, role: user.role || null, ratings: user.ratings || null });
+        res.json({
+            id: user._id,
+            email: user.email,
+            status: user.status,
+            username: user.userName,
+            role: user.role || null,
+            ratings: user.ratings || null,
+            profile: {
+                bio: user.profile?.bio || "",
+                avatar: user.profile?.avatar || ""
+            }
+        });
+
     } catch (error) {
         res.status(500).json({ message: "Failed to fetch profile", error: error.message });
     }
 };
 
 export const updateUserProfile = async (req, res) => {
-    const { bio, role, username } = req.body;
+  const { bio, role, username } = req.body;
 
-    try {
-        const user = await User.findById(req.user._id);
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        user.profile.bio = bio;
-        user.userName = username;
-        user.role = role;
-
-        if (req.file) {
-            const tempDir = './public/temp';
-            const originalFilePath = path.join(tempDir, req.file.filename);
-            let finalFileName = req.file.filename;
-            let fileExt = path.extname(req.file.originalname).toLowerCase();
-
-            // Convert HEIC, HEIF, or WEBP to JPEG
-            if (fileExt === '.heic' || fileExt === '.heif' || fileExt === '.webp') {
-                const newFileName = path.basename(req.file.filename, fileExt) + '.jpg';
-                const newFilePath = path.join(tempDir, newFileName);
-
-                await sharp(originalFilePath)
-                    .jpeg()
-                    .toFile(newFilePath);
-
-                // Delete the original file
-                await fs.unlink(originalFilePath);
-                finalFileName = newFileName;
-            }
-
-            // Upload to Cloudinary (pass only filename)
-            const cloudinaryUrl = await uploadToCloudinary(finalFileName);
-            // Update user's avatar with Cloudinary URL
-            user.profile.avatar = cloudinaryUrl;
-
-        }
-
-        await user.save({ validateBeforeSave: false });
-        res.json({ message: "Profile updated successfully", user });
-       
-    } catch (error) {
-        console.error("Update error:", error);
-        res.status(500).json({ message: "Update failed", error: error.message });
-   
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
+
+    if (bio !== undefined) user.profile.bio = bio;
+    if (username !== undefined) user.userName = username;
+    if (role !== undefined) user.role = role;
+
+    if (req.file) {
+      const tempDir = './public/temp';
+      const originalFilePath = path.join(tempDir, req.file.filename);
+      let finalFileName = req.file.filename;
+      let fileExt = path.extname(req.file.originalname).toLowerCase();
+
+      if (['.heic', '.heif', '.webp'].includes(fileExt)) {
+        const newFileName =
+          path.basename(req.file.filename, fileExt) + '.jpg';
+        const newFilePath = path.join(tempDir, newFileName);
+
+        await sharp(originalFilePath).jpeg().toFile(newFilePath);
+        await fs.unlink(originalFilePath);
+        finalFileName = newFileName;
+      }
+
+      const cloudinaryUrl = await uploadToCloudinary(
+        path.join(tempDir, finalFileName)
+      );
+
+      user.profile.avatar = cloudinaryUrl;
+    }
+
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      message: "Profile updated successfully",
+      profile: user.profile
+    });
+
+  } catch (error) {
+    console.error("Update error:", error);
+    res.status(500).json({ message: "Update failed", error: error.message });
+  }
 };
+
 
 export const toggleUserRole = async (req, res) => {
     try {

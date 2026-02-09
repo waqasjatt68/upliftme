@@ -567,12 +567,13 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
       )}
 
       {/* Show review only if there was a successful match and session */}
-      {showReview && currentSession?.uplifter_id && (
+      {showReview && (currentSession?.uplifter_id || currentSession?.hero_id) && (
         <SessionReview
-          uplifterName={currentSession.uplifter_name}
+          uplifterName={useSessionStore.getState().matchedUser?.username || 'Uplifter'}
           onClose={onClose}
         />
       )}
+
     </div>
   );
 };

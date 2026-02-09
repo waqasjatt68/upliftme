@@ -6,38 +6,55 @@ export const createOrUpdateSubscription = async (req, res) => {
     try {
         const { userId, bundleSize, amountPaid, specialKeyAccess } = req.body;
 
-        // Ensure user exists
+        // 1️⃣ Ensure user exists
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ message: "User not found." });
         }
-
-        // Check if a subscription exists for the user
+        
+        // 2️⃣ Find or create subscription
         let subscription = await Subscription.findOne({ userId });
 
         if (subscription) {
-            // Update existing subscription
             subscription.sessionBalance += bundleSize;
             subscription.totalSpent += amountPaid;
             subscription.purchasedBundles.push({ bundleSize, amountPaid });
+
             if (specialKeyAccess !== undefined) {
                 subscription.specialKeyAccess = specialKeyAccess;
             }
         } else {
-            // Create a new subscription
             subscription = new Subscription({
                 userId,
                 sessionBalance: bundleSize,
                 totalSpent: amountPaid,
                 purchasedBundles: [{ bundleSize, amountPaid }],
-                specialKeyAccess
+                specialKeyAccess: specialKeyAccess || false
             });
         }
 
         await subscription.save();
-        res.status(201).json({ message: "Subscription updated successfully.", subscription });
+
+        // 3️⃣ 🔥 UPDATE USER.subscription (THIS WAS MISSING)
+        user.subscription = {
+            sessionBalance: subscription.sessionBalance,
+            specialKeyAccess: subscription.specialKeyAccess || false,
+            purchasedBundles: subscription.purchasedBundles
+        };
+
+        await user.save();
+        console.log('thiss is user subsctiptionssssss',user.subscription)
+        res.status(201).json({
+            message: "Subscription & user updated successfully",
+            subscription,
+            userSubscription: user.subscription
+        });
+
     } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        res.status(500).json({
+            message: "Server error",
+            error: error.message
+        });
     }
 };
 
