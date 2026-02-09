@@ -189,8 +189,15 @@ export const getUserProfile = async (req, res) => {
     }
 };
 
+
 export const updateUserProfile = async (req, res) => {
   const { bio, role, username } = req.body;
+
+  console.log("\n📝 ========== UPDATE PROFILE ==========");
+  console.log("   Username:", username);
+  console.log("   Bio:", bio);
+  console.log("   Role:", role);
+  console.log("   File:", req.file ? req.file.filename : "No file");
 
   try {
     const user = await User.findById(req.user._id);
@@ -198,43 +205,82 @@ export const updateUserProfile = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Update text fields
     if (bio !== undefined) user.profile.bio = bio;
     if (username !== undefined) user.userName = username;
     if (role !== undefined) user.role = role;
 
+    // Handle file upload
     if (req.file) {
+      console.log("\n📸 Processing uploaded file...");
+      
       const tempDir = './public/temp';
-      const originalFilePath = path.join(tempDir, req.file.filename);
       let finalFileName = req.file.filename;
-      let fileExt = path.extname(req.file.originalname).toLowerCase();
+      const fileExt = path.extname(req.file.originalname).toLowerCase();
 
+      // Convert HEIC/HEIF/WebP to JPG
       if (['.heic', '.heif', '.webp'].includes(fileExt)) {
-        const newFileName =
-          path.basename(req.file.filename, fileExt) + '.jpg';
+        console.log("🔄 Converting image format...");
+        
+        const originalFilePath = path.join(tempDir, req.file.filename);
+        const newFileName = path.basename(req.file.filename, fileExt) + '.jpg';
         const newFilePath = path.join(tempDir, newFileName);
 
-        await sharp(originalFilePath).jpeg().toFile(newFilePath);
+        await sharp(originalFilePath)
+          .jpeg({ quality: 90 })
+          .toFile(newFilePath);
+
         await fs.unlink(originalFilePath);
         finalFileName = newFileName;
+        
+        console.log("✅ Converted to JPG:", newFileName);
       }
 
-      const cloudinaryUrl = await uploadToCloudinary(
-        path.join(tempDir, finalFileName)
-      );
+      // Delete old avatar from Cloudinary
+      if (user.profile.avatar && user.profile.avatar.includes('cloudinary.com')) {
+        console.log("🗑️ Deleting old avatar...");
+        try {
+          await deleteFromCloudinary(user.profile.avatar);
+          console.log("✅ Old avatar deleted");
+        } catch (err) {
+          console.warn("⚠️ Could not delete old avatar:", err.message);
+        }
+      }
 
+      // Upload to Cloudinary
+      // ✅ IMPORTANT: Pass ONLY the filename, not the full path!
+      console.log("☁️ Uploading to Cloudinary...");
+      const cloudinaryUrl = await uploadToCloudinary(finalFileName);
+      
       user.profile.avatar = cloudinaryUrl;
+      console.log("✅ Avatar uploaded:", cloudinaryUrl);
     }
 
+    // Save user
     await user.save({ validateBeforeSave: false });
+
+    console.log("✅ Profile updated successfully!");
+    console.log("======================================\n");
 
     res.json({
       message: "Profile updated successfully",
+      user: {
+        id: user._id,
+        userName: user.userName,
+        email: user.email,
+        bio: user.profile?.bio,
+        avatar: user.profile?.avatar,
+        role: user.role,
+      },
       profile: user.profile
     });
 
   } catch (error) {
-    console.error("Update error:", error);
-    res.status(500).json({ message: "Update failed", error: error.message });
+    console.error("❌ Update error:", error);
+    res.status(500).json({ 
+      message: "Update failed", 
+      error: error.message 
+    });
   }
 };
 

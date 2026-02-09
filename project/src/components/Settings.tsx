@@ -1,259 +1,4 @@
-// import React, { useState, useEffect } from 'react';
-// import { CreditCard, Bell, Shield, Gift, History, HelpCircle, Camera, Upload, Star, User, Code } from 'lucide-react';
-// import { useSessionStore } from '../store/session';
-// import { supabase } from '../lib/supabase';
-// import { toast } from 'sonner';
-
-// const Settings: React.FC = () => {
-//   const [activeTab, setActiveTab] = useState('profile');
-//   const [loading, setLoading] = useState(false);
-//   const [profile, setProfile] = useState<{
-//     username: string;
-//     bio: string;
-//     avatar_url: string;
-//   } | null>(null);
-//   const { loadUserSubscription, isDevelopment, toggleDevelopmentMode } = useSessionStore();
-
-//   useEffect(() => {
-//     loadProfile();
-//   }, []);
-
-//   const loadProfile = async () => {
-//     try {
-//       const { data: { user } } = await supabase.auth.getUser();
-//       if (!user) return;
-
-//       const { data, error } = await supabase
-//         .from('users')
-//         .select('username, bio, avatar_url')
-//         .eq('id', user.id)
-//         .single();
-
-//       if (error) throw error;
-//       setProfile(data);
-//     } catch (error) {
-//       console.error('Error loading profile:', error);
-//       toast.error('Failed to load profile');
-//     }
-//   };
-
-//   const handleProfileUpdate = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     if (!profile) return;
-
-//     setLoading(true);
-//     try {
-//       const { data: { user } } = await supabase.auth.getUser();
-//       if (!user) throw new Error('No user found');
-
-//       const { error } = await supabase
-//         .from('users')
-//         .update({
-//           username: profile.username,
-//           bio: profile.bio,
-//           avatar_url: profile.avatar_url,
-//         })
-//         .eq('id', user.id);
-
-//       if (error) throw error;
-//       toast.success('Profile updated successfully');
-//     } catch (error) {
-//       console.error('Error updating profile:', error);
-//       toast.error('Failed to update profile');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-//     const file = e.target.files?.[0];
-//     if (!file) return;
-
-//     try {
-//       const { data: { user } } = await supabase.auth.getUser();
-//       if (!user) throw new Error('No user found');
-
-//       const fileExt = file.name.split('.').pop();
-//       const fileName = `${user.id}/avatar.${fileExt}`;
-
-//       // First, ensure old avatar is removed
-//       const { data: oldFiles } = await supabase.storage
-//         .from('avatars')
-//         .list(user.id);
-
-//       if (oldFiles?.length) {
-//         await supabase.storage
-//           .from('avatars')
-//           .remove(oldFiles.map(f => `${user.id}/${f.name}`));
-//       }
-
-//       // Upload new avatar
-//       const { error: uploadError } = await supabase.storage
-//         .from('avatars')
-//         .upload(fileName, file, { 
-//           upsert: true,
-//           contentType: file.type
-//         });
-
-//       if (uploadError) throw uploadError;
-
-//       const { data: { publicUrl } } = supabase.storage
-//         .from('avatars')
-//         .getPublicUrl(fileName);
-
-//       setProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : null);
-//       toast.success('Avatar uploaded successfully');
-//     } catch (error) {
-//       console.error('Avatar upload error:', error);
-//       toast.error('Failed to upload avatar');
-//     }
-//   };
-
-//   const tabs = [
-//     {
-//       id: 'profile',
-//       label: 'Profile',
-//       icon: User,
-//       content: profile && (
-//         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
-//           <h3 className="text-xl font-semibold mb-6">Edit Profile</h3>
-//           <form onSubmit={handleProfileUpdate} className="space-y-6">
-//             <div className="flex justify-center">
-//               <div className="relative">
-//                 <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-//                   {profile.avatar_url ? (
-//                     <img 
-//                       src={profile.avatar_url} 
-//                       alt="Profile" 
-//                       className="w-full h-full object-cover" 
-//                     />
-//                   ) : (
-//                     <Camera className="w-12 h-12 text-gray-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
-//                   )}
-//                 </div>
-//                 <label className="absolute bottom-0 right-0 bg-purple-500 rounded-full p-2 cursor-pointer">
-//                   <Upload className="w-4 h-4 text-white" />
-//                   <input
-//                     type="file"
-//                     accept="image/jpeg,image/png,image/gif"
-//                     onChange={handleAvatarUpload}
-//                     className="hidden"
-//                   />
-//                 </label>
-//               </div>
-//             </div>
-
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-//                 Username
-//               </label>
-//               <input
-//                 type="text"
-//                 value={profile.username}
-//                 onChange={(e) => setProfile({ ...profile, username: e.target.value })}
-//                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-//                 required
-//               />
-//             </div>
-
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-//                 Bio
-//               </label>
-//               <textarea
-//                 value={profile.bio}
-//                 onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-//                 rows={4}
-//                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-//               />
-//             </div>
-
-//             <button
-//               type="submit"
-//               disabled={loading}
-//               className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-//             >
-//               {loading ? 'Saving...' : 'Save Changes'}
-//             </button>
-//           </form>
-//         </div>
-//       )
-//     },
-//     {
-//       id: 'developer',
-//       label: 'Developer',
-//       icon: Code,
-//       content: (
-//         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
-//           <div className="flex items-center justify-between mb-4">
-//             <div className="flex items-center space-x-2">
-//               <Code className="w-5 h-5 text-purple-500" />
-//               <h3 className="text-lg font-semibold">Developer Mode</h3>
-//             </div>
-//             <button
-//               onClick={toggleDevelopmentMode}
-//               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-//                 isDevelopment 
-//                   ? 'bg-purple-500 text-white hover:bg-purple-600'
-//                   : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-//               }`}
-//             >
-//               {isDevelopment ? 'Disable Dev Mode' : 'Enable Dev Mode'}
-//             </button>
-//           </div>
-//           {isDevelopment && (
-//             <div className="mt-4 space-y-4">
-//               <p className="text-sm text-gray-600 dark:text-gray-300">
-//                 Developer mode is enabled. All features are unlocked for testing.
-//               </p>
-//               <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-//                 <h4 className="font-medium mb-2">Enabled Features:</h4>
-//                 <ul className="list-disc list-inside text-sm space-y-1 text-gray-600 dark:text-gray-300">
-//                   <li>Bypass subscription requirements</li>
-//                   <li>Unlimited session credits</li>
-//                   <li>Access to all premium features</li>
-//                   <li>Test user functionality</li>
-//                 </ul>
-//               </div>
-//             </div>
-//           )}
-//         </div>
-//       ),
-//     }
-//   ];
-
-//   return (
-//     <div className="max-w-6xl mx-auto px-4 py-8">
-//       <h2 className="text-2xl font-bold mb-8">Settings</h2>
-//       <div className="flex flex-col md:flex-row gap-8">
-//         <div className="w-full md:w-64 space-y-2">
-//           {tabs.map(({ id, label, icon: Icon }) => (
-//             <button
-//               key={id}
-//               onClick={() => setActiveTab(id)}
-//               className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-//                 activeTab === id
-//                   ? 'bg-purple-500 text-white'
-//                   : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-//               }`}
-//             >
-//               <Icon className="w-5 h-5" />
-//               <span>{label}</span>
-//             </button>
-//           ))}
-//         </div>
-//         <div className="flex-1">
-//           {tabs.find(tab => tab.id === activeTab)?.content}
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default Settings;
-
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Camera, Upload, User, Code } from 'lucide-react';
 import { useSessionStore } from '../store/session';
 import { toast } from 'sonner';
@@ -268,6 +13,8 @@ const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'profile' | 'developer'>('profile');
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const { isDevelopment, toggleDevelopmentMode } = useSessionStore();
 
@@ -275,9 +22,14 @@ const Settings: React.FC = () => {
     loadProfile();
   }, []);
 
-  // ================================
-  // LOAD PROFILE FROM YOUR BACKEND
-  // ================================
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   const loadProfile = async () => {
     try {
       const res = await fetch('http://localhost:4000/api/user/me', {
@@ -287,16 +39,18 @@ const Settings: React.FC = () => {
       if (!res.ok) throw new Error('Failed to load profile');
 
       const data = await res.json();
-      setProfile(data);
+      
+      setProfile({
+          username: data.userName || data.username || '',
+          bio: data.profile?.bio || '',
+          avatar_url: data.profile?.avatar || '', // ✅ CORRECT - Use data.profile.avatar
+        });
     } catch (err) {
-      console.error(err);
+      console.error('Error loading profile:', err);
       toast.error('Failed to load profile');
     }
   };
 
-  // ================================
-  // UPDATE PROFILE
-  // ================================
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
@@ -308,67 +62,90 @@ const Settings: React.FC = () => {
       formData.append("username", profile.username);
       formData.append("bio", profile.bio);
 
-      if (profile.avatar_url) {
-        formData.append("file", profile.avatar_url);
+      // ✅ CRITICAL: Append the actual File object, not the blob URL!
+      if (avatarFile) {
+        formData.append("file", avatarFile);
+        console.log("📸 Uploading file:", avatarFile.name);
       }
 
-      const res = await fetch(
-        "http://localhost:4000/api/user/createProfile",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          credentials:"include",
-          body: formData,
-        }
-      );
+      console.log("📤 Updating profile...");
+
+      const res = await fetch("http://localhost:4000/api/user/createProfile", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
 
       if (!res.ok) {
-        throw new Error("Update failed");
+        const error = await res.json();
+        throw new Error(error.message || "Update failed");
       }
 
       const data = await res.json();
-      // setProfile({
-      //   username: data.user.userName,
-      //   bio: data.user.profile.bio,
-      //   avatar_url: data.user.profile.avatar + "?t=" + Date.now()
-      // });
+      console.log("✅ Profile updated:", data);
 
-      console.log("Updated profile:", data);
+      // Update profile with new data
+      if (data.user || data.profile) {
+        setProfile({
+          username: data.user?.userName || data.user?.username || profile.username,
+          bio: data.user?.bio || data.profile?.bio || profile.bio,
+          avatar_url: data.user?.avatar || data.profile?.avatar || profile.avatar_url,
+        });
+      }
 
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      toast.error("Failed to update profile");
+      // Clear file and preview
+      setAvatarFile(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
+
+      toast.success("Profile updated successfully! 🎉");
+
+      // Reload profile from server
+      setTimeout(() => loadProfile(), 1000);
+
+    } catch (error: any) {
+      console.error("❌ Error:", error);
+      toast.error(error.message || "Failed to update profile");
     } finally {
       setLoading(false);
     }
   };
 
-  
-
-  // ================================
-  // AVATAR UPLOAD
-  // ================================
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setProfile(prev =>
-      prev
-        ? {
-            ...prev,
-            avatar_url: URL.createObjectURL(file),
-            avatarFile: file
-          }
-        : null
-    );
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('Image size should be less than 5MB');
+      return;
+    }
+
+    console.log("📸 Image selected:", file.name);
+
+    // Clean up old preview
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    // Create preview
+    const newPreviewUrl = URL.createObjectURL(file);
+    
+    setAvatarFile(file);
+    setPreviewUrl(newPreviewUrl);
+
+    toast.success('Image selected. Click "Save Changes" to upload.');
   };
 
-
-  // ================================
-  // UI TABS
-  // ================================
   const tabs = [
     {
       id: 'profile',
@@ -376,29 +153,31 @@ const Settings: React.FC = () => {
       icon: User,
       content: profile && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
-          <h3 className="text-xl font-semibold mb-6">Edit Profile</h3>
+          <h3 className="text-xl font-semibold mb-6 dark:text-white">Edit Profile</h3>
 
           <form onSubmit={handleProfileUpdate} className="space-y-6">
             {/* Avatar */}
             <div className="flex justify-center">
               <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-gray-200 overflow-hidden">
-                  {profile.avatar_url ? (
+                <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden border-2 border-gray-300">
+                  {(previewUrl || profile.avatar_url) ? (
                     <img
-                      src={profile.avatar_url}
+                      src={previewUrl || profile.avatar_url}
                       alt="Avatar"
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <Camera className="w-12 h-12 text-gray-400 absolute inset-0 m-auto" />
+                    <div className="flex items-center justify-center h-full">
+                      <Camera className="w-12 h-12 text-gray-400" />
+                    </div>
                   )}
                 </div>
 
-                <label className="absolute bottom-0 right-0 bg-purple-500 rounded-full p-2 cursor-pointer">
+                <label className="absolute bottom-0 right-0 bg-purple-500 rounded-full p-2 cursor-pointer hover:bg-purple-600 transition shadow-lg">
                   <Upload className="w-4 h-4 text-white" />
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/heic,image/heif"
                     className="hidden"
                     onChange={handleAvatarUpload}
                   />
@@ -406,36 +185,50 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
+            {/* Selected file info */}
+            {avatarFile && (
+              <div className="text-center">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Selected: <span className="font-medium">{avatarFile.name}</span>
+                </p>
+                <p className="text-xs text-gray-500">
+                  ({(avatarFile.size / 1024).toFixed(2)} KB)
+                </p>
+              </div>
+            )}
+
             {/* Username */}
             <div>
-              <label className="block text-sm font-medium">Username</label>
+              <label className="block text-sm font-medium mb-2 dark:text-gray-300">
+                Username
+              </label>
               <input
+                type="text"
                 value={profile.username}
-                onChange={e =>
-                  setProfile({ ...profile, username: e.target.value })
-                }
-                className="w-full px-3 py-2 border rounded-md"
+                onChange={e => setProfile({ ...profile, username: e.target.value })}
+                className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-purple-500"
                 required
               />
             </div>
 
             {/* Bio */}
             <div>
-              <label className="block text-sm font-medium">Bio</label>
+              <label className="block text-sm font-medium mb-2 dark:text-gray-300">
+                Bio
+              </label>
               <textarea
                 value={profile.bio}
-                onChange={e =>
-                  setProfile({ ...profile, bio: e.target.value })
-                }
+                onChange={e => setProfile({ ...profile, bio: e.target.value })}
                 rows={4}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Tell us about yourself..."
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-purple-500 text-white rounded-lg"
+              className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {loading ? 'Saving...' : 'Save Changes'}
             </button>
@@ -449,12 +242,17 @@ const Settings: React.FC = () => {
       icon: Code,
       content: (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Developer Mode</h3>
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2">
+              <Code className="w-5 h-5 text-purple-500" />
+              <h3 className="text-lg font-semibold dark:text-white">Developer Mode</h3>
+            </div>
             <button
               onClick={toggleDevelopmentMode}
-              className={`px-4 py-2 rounded-lg ${
-                isDevelopment ? 'bg-purple-500 text-white' : 'bg-gray-200'
+              className={`px-4 py-2 rounded-lg font-medium transition ${
+                isDevelopment 
+                  ? 'bg-purple-500 text-white hover:bg-purple-600' 
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300'
               }`}
             >
               {isDevelopment ? 'Disable' : 'Enable'}
@@ -462,9 +260,11 @@ const Settings: React.FC = () => {
           </div>
 
           {isDevelopment && (
-            <p className="mt-4 text-sm text-gray-600">
-              Developer mode unlocks all features for testing.
-            </p>
+            <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                🎉 Developer mode unlocks all features for testing.
+              </p>
+            </div>
           )}
         </div>
       ),
@@ -473,22 +273,22 @@ const Settings: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <h2 className="text-2xl font-bold mb-8">Settings</h2>
+      <h2 className="text-2xl font-bold mb-8 dark:text-white">Settings</h2>
 
-      <div className="flex gap-8">
-        <div className="w-64 space-y-2">
+      <div className="flex flex-col md:flex-row gap-8">
+        <div className="w-full md:w-64 space-y-2">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
                 activeTab === tab.id
                   ? 'bg-purple-500 text-white'
-                  : 'hover:bg-gray-100'
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'
               }`}
             >
               <tab.icon className="w-5 h-5" />
-              {tab.label}
+              <span className="font-medium">{tab.label}</span>
             </button>
           ))}
         </div>

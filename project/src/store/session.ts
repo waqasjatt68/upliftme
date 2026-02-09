@@ -504,7 +504,7 @@ const useSessionStore = create<SessionState>((set, get) => ({
       }
       
       set({ dbId: data.id });
-      set({profilePicture:data.avatar || ''})
+      set({profilePicture: data.profile?.avatar || ''}) 
       // Register user with socket only if we have valid data
       if (data.username && data.id) {
         // socket.emit("registerUser", {
