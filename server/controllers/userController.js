@@ -572,6 +572,7 @@ export const getUserStats2 = async (req, res) => {
         const userId = req.user._id;
 
         const subscription = await Subscription.findOne({ userId: userId });
+        console.log(subscription)
 
         // Auto-expire weekly subscription if expired
         if (

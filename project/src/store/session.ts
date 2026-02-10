@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 // Define a proper type for the session
 interface Session {
   id: string;
+  _id?: string;
   hero_id: string;
   uplifter_id: string;
   status: 'active' | 'completed';
@@ -44,6 +45,8 @@ interface PaymentInfo {
 export type Role = 'hero' | 'uplifter' | 'admin';
 
 interface SessionState {
+  _id?: string;
+  id?: string;
   isActive: boolean;
   timeRemaining: number;
   userStats: any[] | null;
@@ -196,227 +199,125 @@ const useSessionStore = create<SessionState>((set, get) => ({
   
   startSession: async () => {
     const role = get().currentRole;
-
-    if (!role || (role !== 'hero' && role !== 'uplifter')) {
-      toast.error('Invalid role. Please select hero or uplifter.');
+    if (!role || role === "admin") {
+      toast.error("Invalid role");
       return;
     }
 
     set({ isSearching: true });
 
     try {
-      // 1️⃣ Get current user
-      const res = await fetch("/api/user/me", { credentials: "include" });
-    if (!res.ok) throw new Error("Not authenticated");
-    const user = await res.json();
+      const meRes = await fetch("http://localhost:4000/api/user/me", {
+        credentials: "include",
+      });
+      if (!meRes.ok) throw new Error("Auth failed");
 
-      // 4️⃣ Cleanup any previous presence
+      const me = await meRes.json();
+
       await cleanupPresence();
+      await new Promise((r) => setTimeout(r, 400));
 
-      // 5️⃣ Wait a short delay to ensure presence is registered
-      await new Promise(res => setTimeout(res, 500));
-
-      // 6️⃣ Retry findMatch for up to 10 seconds
-      let match: MatchedUser | null = null;
-      const startTime = Date.now();
-      const timeout = 10000; // 10s
-      const retryDelay = 500; // 0.5s
-
-      while (!match && Date.now() - startTime < timeout) {
-        match = await findMatch(role);
-        if (!match) await new Promise(res => setTimeout(res, retryDelay));
-      }
-
+      const match = await findMatch(role);
       if (!match) {
-        toast.error('Failed to find a match. Please try again.');
+        toast.error("No match found");
         set({ isSearching: false });
         return;
       }
 
-      // 7️⃣ Handle match found
-      await handleMatchFound(match);
-
-    } catch (error) {
-      console.error('Failed to start session:', error);
-      toast.error('Failed to start session. Please try again.');
-      set({ isSearching: false });
-    }
-
-    // ----- Inner function for handling the match -----
-    async function handleMatchFound(match: MatchedUser) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
       set({ matchedUser: match });
 
-      // Create session record in Supabase
-      const { data: session, error: sessionError } = await supabase
-        .from('sessions')
-        .insert({
-          hero_id: role === 'hero' ? user.id : match.matched_user_id,
-          uplifter_id: role === 'uplifter' ? user.id : match.matched_user_id,
-          status: 'active',
-          started_at: new Date().toISOString(),
-        })
-        .select('*, uplifter:uplifter_id(username)')
-        .single();
+      const heroId = role === "hero" ? me.id : match.matched_user_id;
+      const uplifterId = role === "uplifter" ? me.id : match.matched_user_id;
 
-      if (sessionError) throw sessionError;
+      const res = await fetch("http://localhost:4000/api/sessions", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          heroId,
+          uplifterId,
+          paymentStatus: "free",
+        }),
+      });
 
-      toast.success('Match found! Starting session...', { duration: 5000 });
+      if (!res.ok) throw new Error("Failed to create session");
+
+      const data = await res.json();
 
       set({
+        currentSession: data.session, // ✅ FIXED
         isActive: true,
-        timeRemaining: 7 * 60, // 7 minutes
-        currentSession: session,
         isSearching: false,
       });
+
+      toast.success("Session started 🎉");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to start session");
+      set({ isSearching: false });
     }
   },
 
-
+  /* -------- VIDEO CALL (ID BUG FIXED) -------- */
   initializeVideoCall: async (container: HTMLElement) => {
-    const { currentSession } = get();
-    if (!currentSession?.id) {
-      throw new Error('No session available');
-    }
+    const session = get().currentSession;
+    const sessionId = session?.id || session?._id;
 
-    try {
-      // console.log('🎥 Initializing video call for session:', currentSession.id);
+    if (!sessionId) throw new Error("No active session");
 
-      // First initialize local video preview with a timeout
-      const localVideoPromise = initializeLocalVideo(container);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Local video initialization timed out')), 15000)
-      );
+    await initializeLocalVideo(container);
+    const client = await initializeDaily(container, sessionId);
 
-      await Promise.race([localVideoPromise, timeoutPromise]);
-      // console.log('✅ Local video initialized');
-
-      // Then initialize the full video call with a timeout
-      const dailyPromise = initializeDaily(container, currentSession.id);
-      const dailyTimeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Daily call initialization timed out')), 15000)
-      );
-
-      const client = await Promise.race([dailyPromise, dailyTimeoutPromise]);
-      // console.log('✅ Daily call initialized');
-
-      set({ videoClient: client });
-      return client;
-    } catch (error) {
-      console.error('Failed to initialize video call:', error);
-      toast.error('Failed to start video call. Please try refreshing.');
-      throw error;
-    }
+    set({ videoClient: client });
+    return client;
   },
 
-  endSession: async (rating?: number, payment?: PaymentInfo) => {
+
+  /* -------- END SESSION (CONTROLLER-SAFE) -------- */
+  endSession: async (rating?: number) => {
     const { currentSession, videoClient } = get();
-    if (!currentSession) return;
+    const sessionId = currentSession?.id || currentSession?._id;
 
-    try {
-      // console.log('🔄 Ending session:', currentSession.id);
+    if (!sessionId) return;
 
-      // Run cleanup operations in parallel for better performance
-      const cleanupPromises = [];
+    if (videoClient) await cleanupDaily();
+    await cleanupPresence();
 
-      // Clean up video call
-      if (videoClient) {
-        cleanupPromises.push(cleanupDaily());
-      }
+    await fetch(`http://localhost:4000/api/sessions/${sessionId}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        endTime: new Date().toISOString(),
+        ratingGiven: rating,
+      }),
+    });
 
-      // Clean up presence
-      cleanupPromises.push(cleanupPresence());
-
-      // Wait for all cleanup operations to complete
-      await Promise.all(cleanupPromises);
-
-      // Update session record
-      const { error: updateError } = await supabase
-        .from('sessions')
-        .update({
-          status: 'completed',
-          ended_at: new Date().toISOString(),
-          rating,
-          payment_intent_id: payment?.payment_intent_id,
-          amount_paid: payment?.amount_paid,
-          uplifter_earnings: payment?.uplifter_earnings,
-          platform_fee: payment?.platform_fee
-        })
-        .eq('id', currentSession.id);
-
-      if (updateError) throw updateError;
-
-      // console.log('✅ Session ended successfully');
-
-      // Reset state but keep current role
-      const currentRole = get().currentRole;
-      set({
-        isActive: false,
-        timeRemaining: 0,
-        currentSession: null,
-        matchedUser: null,
-        isSearching: false,
-        currentRole,
-        videoClient: null
-      });
-    } catch (error) {
-      console.error('Failed to end session:', error);
-      // Still attempt to reset state even if update fails
-      const currentRole = get().currentRole;
-      set({
-        isActive: false,
-        timeRemaining: 0,
-        currentSession: null,
-        matchedUser: null,
-        isSearching: false,
-        currentRole,
-        videoClient: null
-      });
-      throw error;
-    }
+    set({
+      isActive: false,
+      currentSession: null,
+      matchedUser: null,
+      videoClient: null,
+    });
   },
 
+
+  /* -------- CANCEL MATCH (OLD BEHAVIOR) -------- */
   cancelMatch: async () => {
-    try {
-      // console.log('🔄 Canceling match...');
+    await cleanupPresence();
+    await cleanupDaily();
 
-      // Run cleanup operations in parallel for better performance
-      await Promise.all([
-        cleanupPresence(),
-        Promise.resolve(cleanupDaily())
-      ]);
+    set({
+      isActive: false,
+      isSearching: false,
+      currentSession: null,
+      matchedUser: null,
+      videoClient: null,
+    });
 
-      // console.log('✅ Match canceled successfully');
-      toast.info('Match canceled');
-
-      // Reset state but keep current role
-      const currentRole = get().currentRole;
-      set({
-        isActive: false,
-        timeRemaining: 0,
-        currentSession: null,
-        matchedUser: null,
-        isSearching: false,
-        currentRole,
-        videoClient: null
-      });
-    } catch (error) {
-      console.error('Failed to cancel match:', error);
-      // Still reset state even if cleanup fails
-      const currentRole = get().currentRole;
-      set({
-        isActive: false,
-        timeRemaining: 0,
-        currentSession: null,
-        matchedUser: null,
-        isSearching: false,
-        currentRole,
-        videoClient: null
-      });
-    }
+    toast.info("Match cancelled");
   },
+
 
   switchRole: async () => {
     try {

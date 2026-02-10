@@ -52,96 +52,6 @@ export const createPaymentIntent = async (req, res) => {
   }
 };
 
-
-// export const handleStripeWebhook = async (req, res) => {
-//   const sig = req.headers["stripe-signature"];
-//   // console.log("Received webhook with signature:", sig);
-
-//   let event;
-
-//   try {
-//     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-//   } catch (err) {
-//     console.error("Webhook signature verification failed:", err.message);
-//     return res.status(400).send(`Webhook Error: ${err.message}`);
-//   }
-
-//   if (event.type === "payment_intent.succeeded") {
-//     const paymentIntent = event.data.object;
-//     console.log("✅ PaymentIntent was successful!", paymentIntent);
-
-//     const userId = paymentIntent.metadata.userId;
-//     const planType = paymentIntent.metadata.planType;
-//     const bundleSize = parseInt(paymentIntent.metadata.bundleSize || "0");
-
-//     try {
-//       // Fetch existing subscription
-//       const existingSub = await Subscription.findOne({ userId });
-
-//       const updateFields = {
-//         $inc: {
-//           totalSpent: paymentIntent.amount_received / 100,
-//         },
-//         $set: {
-//           lastUpdated: new Date(),
-//         },
-//       };
-
-//       // Handle weekly plan
-//       if (planType === "weekly") {
-//         updateFields.$set.hasWeeklySubscription = true;
-//         updateFields.$set.sessionBalance = bundleSize;
-//         updateFields.$set.weeklyExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-//       }
-
-//       // Handle extended plan only if sessionBalance is 0 and user has a weekly plan
-//       if (planType === "extended") {
-//         if (
-//           existingSub &&
-//           existingSub.hasWeeklySubscription &&
-//           existingSub.sessionBalance <= 0
-//         ) {
-//           updateFields.$set.hasExtendedSubscription = true;
-//           updateFields.$inc.sessionBalance = bundleSize;
-//           updateFields.$push = {
-//             purchasedBundles: {
-//               bundleSize,
-//               amountPaid: paymentIntent.amount_received / 100,
-//             },
-//           };
-//         } else {
-//           console.warn("User not eligible for extended plan purchase");
-//           return res.status(400).json({
-//             message:
-//               "Cannot purchase extended plan. Weekly plan not active or sessions remaining.",
-//           });
-//         }
-//       }
-
-//       const updatedSub = await Subscription.findOneAndUpdate(
-//         { userId },
-//         updateFields,
-//         { upsert: true, new: true }
-//       );
-
-//       console.log("✅ Updated subscription:", updatedSub);
-//     } catch (err) {
-//       console.error("❌ MongoDB update failed:", err);
-//       return res.status(500).json({ message: "MongoDB update error" });
-//     }
-//   }
-
-//   res.json({ received: true });
-// };
-
-
-
-
-// Process a new payment using Stripe
-
-
-// Get all payments
-
 export const handleStripeWebhook = async (req, res) => {
   console.log("🚨🚨🚨 WEBHOOK CALLED! 🚨🚨🚨"); // YE LINE ADD KARO
   console.log("📅 Time:", new Date().toLocaleString());
@@ -161,24 +71,25 @@ export const handleStripeWebhook = async (req, res) => {
     const paymentIntent = event.data.object;
     console.log("✅ PaymentIntent was successful!", paymentIntent);
     // 🧾 Save payment record
-    // const paymentExists = await Payment.findOne({
-    //   transactionId: paymentIntent.id,
-    // });
+    const paymentExists = await Payment.findOne({
+      transactionId: paymentIntent.id,
+    });
+    console.log("🔍 Checking if payment exists:", paymentExists);
 
-    // if (paymentExists) {
-    //   await Payment.create({
-    //     userId: paymentIntent.metadata.userId,
-    //     transactionId: paymentIntent.id,
-    //     amount: paymentIntent.amount_received / 100,
-    //     currency: paymentIntent.currency,
-    //     status: paymentIntent.status, // succeeded
-    //     planType: paymentIntent.metadata.planType,
-    //     paymentMethod: paymentIntent.payment_method_types?.[0] || "card"
-    //   });
+    if (!paymentExists) {
+      await Payment.create({
+        userId: paymentIntent.metadata.userId,
+        transactionId: paymentIntent.id,
+        amount: paymentIntent.amount_received / 100,
+        currency: paymentIntent.currency,
+        status: paymentIntent.status, // succeeded
+        planType: paymentIntent.metadata.planType,
+        paymentMethod: paymentIntent.payment_method_types?.[0] || "card"
+      });
 
-    //   console.log("💾 Payment saved in database");
-    // } else {
-    //   console.log("⚠️ Payment already exists, skipping duplicate save");
+      console.log("💾 Payment saved in database");
+    } else {
+      console.log("⚠️ Payment already exists, skipping duplicate save");
     // }
 
 
@@ -290,8 +201,7 @@ export const handleStripeWebhook = async (req, res) => {
 
   res.json({ received: true });
 };
-
-
+}
 
 export const getAllPayments = async (req, res) => {
     try {
