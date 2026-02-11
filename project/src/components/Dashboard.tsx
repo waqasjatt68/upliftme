@@ -208,8 +208,11 @@ const Dashboard: React.FC = () => {
         toast.info("Using your free trial session!");
       }
 
-      await startSession();
+      const status = await startSession();
       setShowVideoSession(true);
+      if (status === "waiting") {
+        toast.info("Waiting for a match...");
+      }
     } catch (error) {
       console.error("Failed to find match:", error);
       toast.error("Failed to find a match. Please try again.");
@@ -217,6 +220,16 @@ const Dashboard: React.FC = () => {
       setIsStartingSession(false);
     }
   };
+
+  // When match is found via polling, create session and update store so VideoSession gets sessionId
+  useEffect(() => {
+    const onMatchFound = (e: Event) => {
+      const detail = (e as CustomEvent<import("../lib/matching").MatchedUser>).detail;
+      if (detail) useSessionStore.getState().completeSessionWithMatch(detail);
+    };
+    window.addEventListener("matchFound", onMatchFound);
+    return () => window.removeEventListener("matchFound", onMatchFound);
+  }, []);
 
   // const handleFindMatch2 = async () => {
   //   setFindMatch(true);

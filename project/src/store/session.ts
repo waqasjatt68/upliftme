@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { supabase } from '../lib/supabase';
 import { findMatch, MatchedUser, cleanupPresence } from '../lib/matching';
 import { initializeDaily, cleanupDaily, initializeLocalVideo } from '../lib/daily';
 import { toast } from 'sonner';
@@ -82,7 +81,9 @@ interface SessionState {
     weeklyExpiresAt:any|null;
   };
   // startSession: (role: 'hero' | 'uplifter') => Promise<void>;
-  startSession: () => Promise<void>;
+  startSession: () => Promise<'matched' | 'waiting'>;
+  /** Called when match is found via polling (matchFound event). Creates session and updates store. */
+  completeSessionWithMatch: (match: MatchedUser) => Promise<void>;
   endSession: (rating?: number, payment?: PaymentInfo) => Promise<void>;
   cancelMatch: () => Promise<void>;
   initializeVideoCall: (container: HTMLElement) => Promise<any>;
@@ -199,11 +200,11 @@ const useSessionStore = create<SessionState>((set, get) => ({
     return { canStart: false, reason: 'no_subscription' };
   },
   
-  startSession: async () => {
+  startSession: async (): Promise<'matched' | 'waiting'> => {
     const role = get().currentRole;
     if (!role || role === "admin") {
       toast.error("Invalid role");
-      return;
+      return "matched";
     }
 
     set({ isSearching: true });
@@ -221,9 +222,7 @@ const useSessionStore = create<SessionState>((set, get) => ({
 
       const match = await findMatch(role);
       if (!match) {
-        toast.error("No match found");
-        set({ isSearching: false });
-        return;
+        return "waiting";
       }
 
       set({ matchedUser: match });
@@ -245,14 +244,61 @@ const useSessionStore = create<SessionState>((set, get) => ({
       if (!res.ok) throw new Error("Failed to create session");
 
       const data = await res.json();
+      const session = data.session ?? data;
 
       set({
-        currentSession: data.session, // ✅ FIXED
+        currentSession: session,
         isActive: true,
         isSearching: false,
       });
 
       toast.success("Session started 🎉");
+      return "matched";
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to start session");
+      set({ isSearching: false });
+      return "matched";
+    }
+  },
+
+  completeSessionWithMatch: async (match: MatchedUser) => {
+    const role = get().currentRole;
+    if (!role || role === "admin") return;
+
+    try {
+      const meRes = await fetch("http://localhost:4000/api/user/me", {
+        credentials: "include",
+      });
+      if (!meRes.ok) throw new Error("Auth failed");
+      const me = await meRes.json();
+
+      set({ matchedUser: match });
+
+      const heroId = role === "hero" ? me.id : match.matched_user_id;
+      const uplifterId = role === "uplifter" ? me.id : match.matched_user_id;
+
+      const res = await fetch("http://localhost:4000/api/sessions", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          heroId,
+          uplifterId,
+          paymentStatus: "free",
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create session");
+      const data = await res.json();
+      const session = data.session ?? data;
+
+      set({
+        currentSession: session,
+        isActive: true,
+        isSearching: false,
+      });
+      toast.success("Match found! Session started 🎉");
     } catch (error) {
       console.error(error);
       toast.error("Failed to start session");

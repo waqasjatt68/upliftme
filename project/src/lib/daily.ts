@@ -1,7 +1,6 @@
 import DailyIframe from '@daily-co/daily-js';
 import type { DailyCall } from '@daily-co/daily-js';
 import { toast } from 'sonner';
-import { supabase } from './supabase';
 
 let dailyCall: DailyCall | null = null;
 let localStream: MediaStream | null = null;
@@ -9,25 +8,9 @@ let localVideo: HTMLVideoElement | null = null;
 
 const DAILY_API_KEY = import.meta.env.VITE_DAILY_API_KEY;
 
-// Enhanced logging for Daily.co operations
-const logDailyEvent = async (event: string, details: any) => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    await supabase.from('matching_presence_logs').insert({
-      event_type: `daily_${event}`,
-      user_id: user.id,
-      details: {
-        timestamp: new Date().toISOString(),
-        ...details
-      }
-    });
-
-    console.log(`📝 Daily.co Event [${event}]:`, details);
-  } catch (error) {
-    console.error('Failed to log Daily event:', error);
-  }
+// Log Daily.co operations (console only; no Supabase)
+const logDailyEvent = (event: string, details: unknown = {}) => {
+  console.log(`📝 Daily.co Event [${event}]:`, details);
 };
 
 async function createDailyRoom(sessionId: string) {
@@ -37,7 +20,8 @@ async function createDailyRoom(sessionId: string) {
 
     // In development, use a test room
     if (import.meta.env.DEV) {
-      const url = `https://upliftme.daily.co/test-room-${sessionId}`;
+      // const url = `https://waqasjattroom.daily.co/waqasjattroom-${sessionId}`;
+      const url = `https://waqasjattroom.daily.co/waqasjattroom`;
       console.log("[Daily] DEV mode – using test room", { url });
       await logDailyEvent('using_test_room', { sessionId });
       return {
@@ -53,6 +37,7 @@ async function createDailyRoom(sessionId: string) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${DAILY_API_KEY}`
       },
+      credentials:'include',
       body: JSON.stringify({
         name: `session-${sessionId}`,
         privacy: 'private',
@@ -97,6 +82,7 @@ async function createDailyRoom(sessionId: string) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${DAILY_API_KEY}`
       },
+      credentials:'include',
       body: JSON.stringify({
         properties: {
           room_name: data.name,
@@ -120,22 +106,13 @@ async function createDailyRoom(sessionId: string) {
     const tokenData = await tokenResponse.json();
     await logDailyEvent('token_created', { roomName: data.name });
 
-    // Store room URL in session record
-    const { error: updateError } = await supabase
-      .from('sessions')
-      .update({ room_url: data.url })
-      .eq('id', sessionId);
-
-    if (updateError) {
-      await logDailyEvent('room_url_update_error', updateError);
-    }
-
     return {
       url: data.url,
       token: tokenData.token
     };
   } catch (error) {
-    await logDailyEvent('room_creation_failed', { error: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    await logDailyEvent('room_creation_failed', { error: message });
     throw error;
   }
 }
@@ -206,9 +183,10 @@ export async function initializeLocalVideo(container: HTMLElement) {
     
     return localStream;
   } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
     await logDailyEvent('local_video_error', {
-      error: error.message,
-      name: error.name
+      error: err.message,
+      name: err.name
     });
 
     if (error instanceof Error) {
@@ -245,32 +223,21 @@ export async function initializeDaily(container: HTMLElement, sessionId: string)
     container.innerHTML = '';
     console.log("[Daily] creating Daily iframe...");
     
-    // Create new Daily call with optimized settings
+    // Create new Daily call (Prebuilt iframe). sendSettings/receiveSettings are only for
+    // call object mode, not createFrame — omit them to avoid "Invalid sendSettings" error.
     dailyCall = DailyIframe.createFrame(container, {
       showLeaveButton: false,
       showFullscreenButton: false,
       showParticipantsBar: false,
       iframeStyle: {
         position: 'absolute',
-        top: 0,
-        left: 0,
+        top: '0',
+        left: '0',
         width: '100%',
         height: '100%',
         border: 'none',
         borderRadius: '12px'
-      },
-      receiveSettings: {
-        video: { max: 1280, min: 720 },
-        audio: true
-      },
-      sendSettings: {
-        video: { max: 1280, min: 720 },
-        audio: true
-      },
-      micQuality: 'high',
-      videoQuality: 'high',
-      simulcast: true,
-      adaptiveVideo: true
+      }
     });
 
     // Set up event handlers with detailed logging
@@ -312,9 +279,23 @@ export async function initializeDaily(container: HTMLElement, sessionId: string)
         logDailyEvent('camera_error', event);
         toast.error('Failed to access camera. Please check your permissions and try again.');
       })
-      .on('error', (error) => {
+      .on('error', (error: unknown) => {
         logDailyEvent('daily_error', error);
-        toast.error('Video session error. Please refresh and try again.');
+        const msg =
+          typeof error === 'object' && error !== null && 'errorMsg' in error
+            ? String((error as { errorMsg?: string }).errorMsg)
+            : error instanceof Error
+              ? error.message
+              : String(error);
+        const isPaymentError = /account-missing-payment-method/i.test(msg);
+        if (isPaymentError) {
+          toast.error(
+            'Video provider (Daily.co) requires a payment method on your account. Add one at dashboard.daily.co to enable video calls.',
+            { duration: 8000 }
+          );
+        } else {
+          toast.error('Video session error. Please refresh and try again.');
+        }
       })
       .on('network-quality-change', (event) => {
         logDailyEvent('network_quality_change', {
@@ -323,9 +304,10 @@ export async function initializeDaily(container: HTMLElement, sessionId: string)
         });
       })
       .on('network-connection', (event) => {
+        const ev = event as { type?: string; message?: string };
         logDailyEvent('network_connection', {
-          type: event?.type,
-          message: event?.message
+          type: ev?.type,
+          message: ev?.message
         });
       });
 
@@ -341,20 +323,24 @@ export async function initializeDaily(container: HTMLElement, sessionId: string)
     await new Promise(resolve => setTimeout(resolve, 1000));
     console.log("[Daily] joining call...");
 
-    await dailyCall.join({
+    const joinOptions: { url: string; token?: string; audioSource: boolean; videoSource: boolean } = {
       url,
-      token,
       audioSource: true,
       videoSource: true
-    });
+    };
+    if (typeof token === 'string' && token.length > 0) {
+      joinOptions.token = token;
+    }
+    await dailyCall.join(joinOptions);
 
     console.log("[Daily] join() completed successfully");
     await logDailyEvent('daily_initialized', { sessionId });
     return dailyCall;
   } catch (error) {
     console.error("[Daily] initializeDaily error", error);
+    const message = error instanceof Error ? error.message : String(error);
     await logDailyEvent('daily_init_error', {
-      error: error.message,
+      error: message,
       sessionId
     });
     throw error;
@@ -369,7 +355,8 @@ export function toggleVideo(enabled: boolean) {
     dailyCall.setLocalVideo(enabled);
     toast.info(`Camera ${enabled ? 'enabled' : 'disabled'}`);
   } catch (error) {
-    logDailyEvent('toggle_video_error', { error: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    logDailyEvent('toggle_video_error', { error: message });
     throw error;
   }
 }
@@ -382,19 +369,23 @@ export function toggleAudio(enabled: boolean) {
     dailyCall.setLocalAudio(enabled);
     toast.info(`Microphone ${enabled ? 'unmuted' : 'muted'}`);
   } catch (error) {
-    logDailyEvent('toggle_audio_error', { error: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    logDailyEvent('toggle_audio_error', { error: message });
     throw error;
   }
 }
 
 export function setVolume(volume: number) {
   if (!dailyCall) return;
-  
+  const call = dailyCall as DailyCall & { setOutputVolume?: (v: number) => void };
   try {
     logDailyEvent('set_volume', { volume });
-    dailyCall.setOutputVolume(volume);
+    if (typeof call.setOutputVolume === 'function') {
+      call.setOutputVolume(volume);
+    }
   } catch (error) {
-    logDailyEvent('set_volume_error', { error: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    logDailyEvent('set_volume_error', { error: message });
     throw error;
   }
 }
@@ -431,6 +422,7 @@ export async function cleanupDaily() {
     
     await logDailyEvent('cleanup_complete', {});
   } catch (error) {
-    await logDailyEvent('cleanup_error', { error: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    await logDailyEvent('cleanup_error', { error: message });
   }
 }

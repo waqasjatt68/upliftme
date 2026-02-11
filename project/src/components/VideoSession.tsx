@@ -204,6 +204,7 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
           setIsWaiting(false);
         } catch (error) {
           console.error("[VideoSession] initializeVideoCall failed", error);
+          const message = error instanceof Error ? error.message : 'Failed to connect to the video room.';
           if (error instanceof Error) {
             if (error.message.includes('NotAllowedError')) {
               setMediaError('Camera access was denied. Please allow access in your browser settings and refresh the page.');
@@ -212,10 +213,10 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
             } else if (error.message.includes('NotReadableError')) {
               setMediaError('Camera is in use by another application. Please close other apps using the camera.');
             } else {
-              setMediaError('Failed to initialize video call: ' + error.message);
+              setMediaError(message);
             }
           } else {
-            setMediaError('Failed to initialize video call');
+            setMediaError(message);
           }
         }
       } else {
@@ -347,18 +348,28 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
     );
   }
 
+  const isCameraRelatedError = mediaError
+    ? /camera|permission|denied|NotAllowedError|NotFoundError|NotReadableError/i.test(mediaError)
+    : false;
+
   if (mediaError) {
     return (
       <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-6 text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">Camera Access Error</h3>
+          <h3 className="text-xl font-semibold mb-2">
+            {isCameraRelatedError ? 'Camera Access Error' : "Video call couldn't start"}
+          </h3>
           <p className="text-gray-600 dark:text-gray-300 mb-6">
             {mediaError}
-            <br />
-            <span className="text-sm mt-2 block">
-              Please check your browser settings and ensure camera access is enabled.
-            </span>
+            {isCameraRelatedError && (
+              <>
+                <br />
+                <span className="text-sm mt-2 block">
+                  Please check your browser settings and ensure camera access is enabled.
+                </span>
+              </>
+            )}
           </p>
           <div className="space-y-3">
             <button
