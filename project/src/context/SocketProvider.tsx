@@ -18,7 +18,7 @@ interface SocketProviderProps {
 }
 
 export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
-  const socket = useMemo(() => io(`https://www.upliftmee.com`), []);
+  const socket = useMemo(() => io(`http://localhost:4000`), []);
   // console.log("connecting socket 1");
   
 

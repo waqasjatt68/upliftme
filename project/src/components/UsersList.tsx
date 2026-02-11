@@ -20,8 +20,8 @@ import {
   RefreshCw,
   ArrowLeft
 } from "lucide-react";
-
-import SessionTimer from '../components/sessionTimer';
+ 
+import SessionTimer from '../components/SessionTimer';
 interface Error {
   message: string | null;
 }
@@ -78,8 +78,7 @@ function MyVideoConference() {
         <div className="absolute bottom-4 right-4 w-24 sm:w-32 aspect-[3/4] bg-black rounded-lg overflow-hidden shadow-lg border border-purple-400">
           <ParticipantTile
             trackRef={localTrack}
-            className="w-full h-full object-contain"
-            disableName={true}
+            className="w-full h-full object-contain [&_[data-lk-participant-name]]:hidden"
           />
           <div className="absolute bottom-1 left-0 right-0 text-center text-white text-xs bg-black/50 backdrop-blur-sm py-0.5">
             You
@@ -124,8 +123,7 @@ const Counter = () => {
   }));
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'failed'>('disconnected');
   const [connected, setConnected] = useState(false);
-  const [error, setError] = useState<string | Error>(null);
-  
+  const [error, setError] = useState<string | Error | null>(null);  
   // Call states
   const [userReadyToCall, setUserReadyToCall] = useState(false);
   const [callerName, setCallerName] = useState<string>("");
@@ -194,10 +192,10 @@ const Counter = () => {
       setConnectionStatus('connected');
       setConnected(true);
       return true;
-    } catch (error) {
-      console.error("Room connection error:", error);
+    } catch (err) {
+      console.error("Room connection error:", err);
       setConnectionStatus('failed');
-      setError(error.message || "Failed to connect to video call");
+      setError(err instanceof Error ? err.message : "Failed to connect to video call");
       return false;
     }
   }, [room]);
@@ -522,7 +520,7 @@ const Counter = () => {
             <div className="text-red-500 text-center mb-4">
               <X className="w-10 h-10 mx-auto mb-2" />
               <h3 className="text-xl font-medium">Connection Failed</h3>
-              <p className="mt-2 text-gray-700 dark:text-gray-300">{error || "Could not establish call connection"}</p>
+              <p className="mt-2 text-gray-700 dark:text-gray-300">{error == null ? "Could not establish call connection" : typeof error === "string" ? error : (error.message || "Could not establish call connection")}</p>
             </div>
             <div className="flex justify-center">
               <button 
@@ -547,7 +545,7 @@ const Counter = () => {
           </div>
         </div>
         <h3 className="text-2xl font-medium text-white">Connection Failed</h3>
-        <p className="mt-3 text-gray-300">{error || "Could not establish call connection"}</p>
+        <p className="mt-3 text-gray-300">{error == null ? "Could not establish call connection" : typeof error === "string" ? error : (error.message || "Could not establish call connection")}</p>
       </div>
       
       <div className="bg-red-900/30 border border-red-800/50 rounded-lg p-4 mb-6">
@@ -794,7 +792,7 @@ const Counter = () => {
 
                 {error && (
                   <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
-                    {error}
+                    {typeof error === "string" ? error : error.message}
                   </div>
                 )}
 
@@ -821,14 +819,18 @@ const Counter = () => {
             </div>
             <button
               className="w-full py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium flex items-center justify-center transition-colors"
-              onClick={() => acceptCallFromPromt(incomingCallRoom)}
+              onClick={() => {
+                if (incomingCallRoom) acceptCallFromPromt(incomingCallRoom);
+              }}
             >
               <Phone className="w-5 h-5 mr-2" />
               Start Call
             </button>
             <button
               className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium flex items-center justify-center mt-5 transition-colors"
-              onClick={() => endCallFromPromt(incomingCallRoom)}
+              onClick={() => {
+                if (incomingCallRoom) endCallFromPromt(incomingCallRoom);
+              }}
             >
               <Phone className="w-5 h-5 mr-2" />
               Decline Call

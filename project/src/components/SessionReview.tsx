@@ -114,9 +114,7 @@ const SessionReview: React.FC<SessionReviewProps> = ({ uplifterName, onClose }) 
           payment_intent_id: 'dev_pi_' + Date.now(),
           amount_paid: 110,
           uplifter_earnings: 100,
-          platform_fee: 10,
-          message,
-          note
+          platform_fee: 10
         });
         onClose();
         return;
@@ -143,9 +141,7 @@ const SessionReview: React.FC<SessionReviewProps> = ({ uplifterName, onClose }) 
         payment_intent_id: import.meta.env.DEV ? 'dev_pi_success' : 'pi_success',
         amount_paid: 110,
         uplifter_earnings: 100,
-        platform_fee: 10,
-        message,
-        note
+        platform_fee: 10
       });
 
       onClose();

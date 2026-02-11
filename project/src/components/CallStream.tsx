@@ -1,22 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Video } from 'twilio-video';
-
-// IMPORTANT: Replace these with your Twilio credentials in your actual code
-// DO NOT commit these to version control or share them publicly
-const TWILIO_CONFIG = {
-  twilioSid: 'AC3ed999b61a7ef14a303e542d53633020', // Replace with your SID
-  twilioAuth: 'b487d720019b4b98b805eb570f6d100b', // Replace with your Auth token
-  twilioServicesSid: 'VAd7d71767f28fcbf92d5cfd16638afccf' // Replace with your Services SID
-};
+import { useState, useEffect, useRef } from 'react';
+import { connect, Room, RemoteParticipant, RemoteTrack, RemoteTrackPublication, LocalTrackPublication } from 'twilio-video';
 
 const TwilioVideoCall = () => {
-  const [room, setRoom] = useState(null);
+  const [room, setRoom] = useState<Room | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [participantIdentity, setParticipantIdentity] = useState('');
-  const [participants, setParticipants] = useState([]);
+  const [participants, setParticipants] = useState<RemoteParticipant[]>([]);
   const [status, setStatus] = useState('disconnected'); // disconnected, connecting, connected
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
+  const [roomNameInput, setRoomNameInput] = useState('');
+  const [incomingRoomInput, setIncomingRoomInput] = useState('');
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     // Cleanup on component unmount
@@ -28,7 +22,7 @@ const TwilioVideoCall = () => {
   }, [room]);
 
   // Helper function to get a token from your backend
-  const getToken = async (identity) => {
+  const getToken = async (identity: string): Promise<string> => {
     try {
       // In production, you should have a server endpoint that generates tokens
       // This is just a placeholder - you need to implement this on your backend
@@ -50,35 +44,36 @@ const TwilioVideoCall = () => {
   };
 
   // Handle incoming participant
-  const handleParticipantConnected = (participant) => {
+  const handleParticipantConnected = (participant: RemoteParticipant) => {
     setParticipantIdentity(participant.identity);
     setParticipants(prevParticipants => [...prevParticipants, participant]);
 
     // Handle participant's video tracks
-    participant.tracks.forEach(publication => {
-      if (publication.isSubscribed) {
+    participant.tracks.forEach((publication: RemoteTrackPublication) => {
+      if (publication.isSubscribed && publication.track) {
         handleTrackSubscribed(publication.track, participant);
       }
     });
 
     // Listen for track subscription events
-    participant.on('trackSubscribed', track => {
+    participant.on('trackSubscribed', (track: RemoteTrack) => {
       handleTrackSubscribed(track, participant);
     });
   };
 
   // Handle disconnection
-  const handleParticipantDisconnected = (participant) => {
-    setParticipants(prevParticipants => 
-      prevParticipants.filter(p => p !== participant)
-    );
-    if (participants.length === 0) {
-      setParticipantIdentity('');
-    }
+  const handleParticipantDisconnected = (participant: RemoteParticipant) => {
+    setParticipants(prevParticipants => {
+      const newList = prevParticipants.filter(p => p !== participant);
+      if (newList.length === 0) {
+        setParticipantIdentity('');
+      }
+      return newList;
+    });
   };
 
   // Handle track subscription
-  const handleTrackSubscribed = (track, participant) => {
+  const handleTrackSubscribed = (track: RemoteTrack, participant: RemoteParticipant) => {
     if (track.kind === 'video') {
       if (remoteVideoRef.current) {
         track.attach(remoteVideoRef.current);
@@ -93,7 +88,7 @@ const TwilioVideoCall = () => {
   };
 
   // Initiate call
-  const initiateCall = async (roomName) => {
+  const initiateCall = async (roomName: string) => {
     try {
       setConnecting(true);
       setStatus('connecting');
@@ -103,14 +98,14 @@ const TwilioVideoCall = () => {
       const token = await getToken(identity);
 
       // Connect to room
-      const newRoom = await Video.connect(token, {
+      const newRoom = await connect(token, {
         name: roomName,
         audio: true,
         video: { width: 640 },
       });
 
       // Set up local video
-      newRoom.localParticipant.tracks.forEach(publication => {
+      newRoom.localParticipant.tracks.forEach((publication: LocalTrackPublication) => {
         if (publication.track.kind === 'video' && localVideoRef.current) {
           publication.track.attach(localVideoRef.current);
         }
@@ -132,7 +127,7 @@ const TwilioVideoCall = () => {
   };
 
   // Accept incoming call
-  const acceptCall = async (roomName) => {
+  const acceptCall = async (roomName: string) => {
     await initiateCall(roomName);
   };
 
@@ -166,12 +161,13 @@ const TwilioVideoCall = () => {
           <div className="flex gap-2">
             <input 
               type="text" 
-              id="roomName" 
+              value={roomNameInput}
+              onChange={(e) => setRoomNameInput(e.target.value)}
               placeholder="Enter room name" 
               className="px-3 py-2 border rounded-md"
             />
             <button
-              onClick={() => initiateCall(document.getElementById('roomName').value)}
+              onClick={() => initiateCall(roomNameInput)}
               disabled={connecting}
               className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
             >
@@ -184,12 +180,13 @@ const TwilioVideoCall = () => {
           <div className="flex gap-2">
             <input 
               type="text" 
-              id="incomingRoom" 
+              value={incomingRoomInput}
+              onChange={(e) => setIncomingRoomInput(e.target.value)}
               placeholder="Room to join" 
               className="px-3 py-2 border rounded-md"
             />
             <button
-              onClick={() => acceptCall(document.getElementById('incomingRoom').value)}
+              onClick={() => acceptCall(incomingRoomInput)}
               disabled={connecting}
               className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
             >

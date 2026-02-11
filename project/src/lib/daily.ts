@@ -32,13 +32,16 @@ const logDailyEvent = async (event: string, details: any) => {
 
 async function createDailyRoom(sessionId: string) {
   try {
+    console.log("[Daily] createDailyRoom start", { sessionId });
     await logDailyEvent('room_creation_start', { sessionId });
 
     // In development, use a test room
     if (import.meta.env.DEV) {
+      const url = `https://upliftme.daily.co/test-room-${sessionId}`;
+      console.log("[Daily] DEV mode – using test room", { url });
       await logDailyEvent('using_test_room', { sessionId });
       return {
-        url: `https://upliftme.daily.co/test-room-${sessionId}`,
+        url,
         token: null
       };
     }
@@ -223,8 +226,10 @@ export async function initializeLocalVideo(container: HTMLElement) {
 
 export async function initializeDaily(container: HTMLElement, sessionId: string) {
   try {
+    console.log("[Daily] initializeDaily start", { sessionId, containerId: container?.id });
     // Clean up any existing call
     if (dailyCall) {
+      console.log("[Daily] cleaning up existing call");
       await logDailyEvent('cleanup_existing_call', { sessionId });
       dailyCall.leave();
       dailyCall.destroy();
@@ -238,6 +243,7 @@ export async function initializeDaily(container: HTMLElement, sessionId: string)
     
     // First, ensure container is empty
     container.innerHTML = '';
+    console.log("[Daily] creating Daily iframe...");
     
     // Create new Daily call with optimized settings
     dailyCall = DailyIframe.createFrame(container, {
@@ -325,12 +331,15 @@ export async function initializeDaily(container: HTMLElement, sessionId: string)
 
     // Create room and join the call
     await logDailyEvent('creating_room', { sessionId });
+    console.log("[Daily] createDailyRoom...");
     const { url, token } = await createDailyRoom(sessionId);
+    console.log("[Daily] room ready", { url: url?.substring(0, 50) + "...", hasToken: !!token });
     
     await logDailyEvent('joining_room', { url });
 
     // Add a small delay before joining to ensure room is ready
     await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log("[Daily] joining call...");
 
     await dailyCall.join({
       url,
@@ -339,9 +348,11 @@ export async function initializeDaily(container: HTMLElement, sessionId: string)
       videoSource: true
     });
 
+    console.log("[Daily] join() completed successfully");
     await logDailyEvent('daily_initialized', { sessionId });
     return dailyCall;
   } catch (error) {
+    console.error("[Daily] initializeDaily error", error);
     await logDailyEvent('daily_init_error', {
       error: error.message,
       sessionId

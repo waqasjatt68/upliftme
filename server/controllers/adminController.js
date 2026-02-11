@@ -421,7 +421,7 @@ export const gift3Session = async (req, res) => {
     if (!userToGift) {
       return res.status(404).json({ message: "User not found." });
     }
-    console.log("user to Gift",userToGift);
+    // console.log("user to Gift",userToGift);
     
     const existingSub = await Subscription.findOne({ userId });
 
@@ -445,7 +445,7 @@ export const gift3Session = async (req, res) => {
       });
 
       await newSub.save();
-      console.log("🆕 Created new subscription:", newSub);
+    //   console.log("🆕 Created new subscription:", newSub);
       return res.status(200).json({ message: "3 sessions gifted successfully", subscription: newSub });
     }
 

@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
-import socket from "../lib/socket.js";
-import { useSessionStore } from '../store/session';
+import socket from "../../lib/socket.js";
+import { useSessionStore } from '../../store/session';
 import {
   User,
   UserPlus,
@@ -54,6 +54,7 @@ interface User {
   dbId: string;
   state: string;
   rating: number;
+  device?: string;  // optional if it might not always be present
 }
 
 // Enhanced MediaUtils for better track management
@@ -180,8 +181,8 @@ const CallComponent: React.FC = () => {
   }, [inCall])
 
   useEffect(() => {
-    setRole(currentRole)
-  }, [currentRole])
+    if (currentRole !== null) setRole(currentRole);
+  }, [currentRole]);
   useEffect(() => {
 
     setuserRating(rating)
@@ -991,7 +992,7 @@ const CallComponent: React.FC = () => {
                             </div>
                             <button
                               className="flex items-center bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 transform hover:scale-105"
-                              onClick={() => handleUserReadyToCall(user.socketId, user.dbId, user.device, user.username)}
+                              onClick={() => handleUserReadyToCall(user.socketId, user.dbId, user.device??"", user.username)}
                             >
                               <Phone className="w-4 h-4 mr-1" />
                               Start
@@ -1014,7 +1015,7 @@ const CallComponent: React.FC = () => {
                       </div>
                     )}
                   </div>
-                ) : (
+                ) : ( 
                   <div className="text-center py-12 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div className="flex justify-center">
                       <div className="bg-gray-200 dark:bg-gray-600 p-4 rounded-full inline-flex">

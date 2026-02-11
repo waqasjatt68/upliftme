@@ -13,6 +13,7 @@ import flaggedUserRoutes from "./routes/flaggedUserRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import referralRoutes from "./routes/referralRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
+import matchingRoutes from "./routes/matchingRoutes.js"
 import authMiddleware from "./middlewares/auth.middleware.js"
 import { AccessToken } from 'livekit-server-sdk'
 import  verifySubscription  from "./middlewares/verifySubscription.middleware.js"; // Adjust the path as needed
@@ -50,12 +51,12 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
-app.use("/api/verifyhook/webhook", bodyParser.raw({ type: "application/json" }));
-app.use("/api/verifyhook",((req, res,next)=>{
+app.use("http://localhost:4000/api/verifyhook/webhook", bodyParser.raw({ type: "application/json" }));
+app.use("http://localhost:4000/api/verifyhook",((req, res,next)=>{
   console.log("verifyhook middleware called");
   next()
 }), paymentRoutes);
-app.post("/api/payments/webhook", bodyParser.raw({type: "application/json"}), handleStripeWebhook);
+app.post("http://localhost:4000/api/payments/webhook", bodyParser.raw({type: "application/json"}), handleStripeWebhook);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -77,7 +78,8 @@ app.get("/", (req, res) => {
       payments: "/api/payments",
       referrals: "/api/referrals",
       subscriptions: "/api/subscriptions",
-      token: "/api/token (POST)"
+      token: "/api/token (POST)",
+      matching:"/api/matching"
     }
   });
 });
@@ -120,6 +122,7 @@ app.use("/api/payments", authMiddleware, paymentRoutes);
 app.use("/api/verifyhook", paymentRoutes);
 app.use("/api/referrals", authMiddleware, referralRoutes);
 app.use("/api/subscriptions",authMiddleware, subscriptionRoutes);
+app.use("/api/matching",authMiddleware, matchingRoutes);
 
 
 

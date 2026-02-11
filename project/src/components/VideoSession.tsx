@@ -36,6 +36,40 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
   const [bothParticipantsJoined, setBothParticipantsJoined] = useState(false);
   const [timerStarted, setTimerStarted] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasAttemptedInitRef = useRef(false);
+
+  // Debug: log when VideoSession mounts and when currentSession changes
+  useEffect(() => {
+    const sessionId = currentSession?.id ?? currentSession?._id;
+    console.log("[VideoSession] mount/update", {
+      hasCurrentSession: !!currentSession,
+      sessionId,
+      isWaiting,
+      showPermissionPrompt,
+      hasMediaError: !!mediaError,
+    });
+  }, [currentSession, isWaiting, showPermissionPrompt, mediaError]);
+
+  // Auto-start video when we have a session and container is ready (fixes infinite "Waiting for your match...")
+  useEffect(() => {
+    if (!currentSession || hasAttemptedInitRef.current) return;
+    const sessionId = currentSession.id ?? currentSession._id;
+    if (!sessionId) {
+      console.warn("[VideoSession] currentSession has no id or _id, cannot init video", currentSession);
+      return;
+    }
+    const tryInit = () => {
+      if (!videoContainerRef.current) {
+        console.warn("[VideoSession] container ref not ready yet, retrying in 100ms");
+        setTimeout(tryInit, 100);
+        return;
+      }
+      hasAttemptedInitRef.current = true;
+      console.log("[VideoSession] auto-starting requestMediaAccess (session ready)", { sessionId });
+      void requestMediaAccess();
+    };
+    tryInit();
+  }, [currentSession]);
 
   // Format time for display
   const minutes = Math.floor(timeRemaining / 60);
@@ -121,33 +155,42 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
   }, [messages]);
 
   const requestMediaAccess = async () => {
+    console.log("[VideoSession] requestMediaAccess called", { hasContainer: !!videoContainerRef.current, hasCurrentSession: !!currentSession });
     try {
-      if (!videoContainerRef.current) return false;
+      if (!videoContainerRef.current) {
+        console.warn("[VideoSession] requestMediaAccess aborted: no video container ref");
+        return false;
+      }
 
       // First check if permissions are already granted
       try {
         const permissions = await navigator.permissions.query({ name: 'camera' as PermissionName });
         if (permissions.state === 'denied') {
+          console.warn("[VideoSession] camera permission denied");
           setMediaError('Camera access is blocked. Please allow access in your browser settings and refresh the page.');
           return false;
         }
       } catch (err) {
         // Some browsers don't support permissions API, continue anyway
-        console.warn('Could not check camera permissions:', err);
+        console.warn('[VideoSession] Could not check camera permissions:', err);
       }
 
+      console.log("[VideoSession] initializing local video preview...");
       // First initialize local video preview
       await initializeLocalVideo(videoContainerRef.current);
-      
+      console.log("[VideoSession] local video preview ok");
+
       setHasMediaPermissions(true);
       setMediaError(null);
       setShowPermissionPrompt(false);
 
       // Only initialize video call if we have a session
       if (currentSession) {
+        console.log("[VideoSession] calling initializeVideoCall...");
         try {
           const client = await initializeVideoCall(videoContainerRef.current);
-          
+          console.log("[VideoSession] initializeVideoCall success, setting isWaiting=false");
+
           // Set up event listeners for participant changes
           client.on('participant-joined', () => {
             setBothParticipantsJoined(true);
@@ -160,7 +203,7 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
 
           setIsWaiting(false);
         } catch (error) {
-          console.error('Failed to initialize video call:', error);
+          console.error("[VideoSession] initializeVideoCall failed", error);
           if (error instanceof Error) {
             if (error.message.includes('NotAllowedError')) {
               setMediaError('Camera access was denied. Please allow access in your browser settings and refresh the page.');
@@ -175,11 +218,13 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
             setMediaError('Failed to initialize video call');
           }
         }
+      } else {
+        console.warn("[VideoSession] no currentSession – skipping initializeVideoCall (isWaiting will stay true)");
       }
 
       return true;
     } catch (err) {
-      console.error('Media permission error:', err);
+      console.error("[VideoSession] requestMediaAccess error", err);
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError') {
           setMediaError('Camera access was denied. Please allow access in your browser settings and refresh the page.');

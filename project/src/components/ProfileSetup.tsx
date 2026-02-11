@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Camera, Upload } from "lucide-react";
 import imageCompression from 'browser-image-compression';
-const serverUri = import.meta.env.VITE_SERVER_URI;
 
 interface ProfileSetupProps {
   role: "hero" | "uplifter";
@@ -18,9 +17,10 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ role, onComplete }) => {
 
   
 // Utility function to convert base64 string to File object
-function base64ToFile(base64Data, filename) {
+function base64ToFile(base64Data: string, filename: string): File {
     const arr = base64Data.split(',');
-    const mime = arr[0].match(/:(.*?);/)[1];
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch?.[1] ?? 'image/jpeg';
     const bstr = atob(arr[1]);
     let n = bstr.length;
     const u8arr = new Uint8Array(n);
@@ -51,6 +51,7 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const reader = new FileReader();
       reader.onloadend = async () => {
           const base64String = reader.result;
+          if (typeof base64String !== 'string') return;
           const convertedFile = base64ToFile(base64String, file.name || 'camera.jpg');
 
           // Compress the file

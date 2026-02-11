@@ -149,17 +149,19 @@ const useSessionStore = create<SessionState>((set, get) => ({
     }
 
     try {
-      const response = await fetch(`http://localhost:4000/api/session-availability`, {
+      const response = await fetch(`http://localhost:4000/api/subscriptions`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        },
+        credentials:'include'
       });
 
       if (!response.ok) throw new Error('Failed to fetch subscription');
 
       const data = await response.json();
+      // console.log('dataaaaaaaaaaaaaa',data)
 
       // Update store with correct subscription info
       set({
@@ -532,7 +534,7 @@ const useSessionStore = create<SessionState>((set, get) => ({
       if (!data || !data.stats) {
         throw new Error("Invalid stats data received");
       }
-      console.log(data.subscription);
+      // console.log(data.subscription);
       
       data.subscription.specialKeyAccess=true;
       data.subscription.hasExtendedSubscription=false;

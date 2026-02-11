@@ -53,8 +53,8 @@ export const createPaymentIntent = async (req, res) => {
 };
 
 export const handleStripeWebhook = async (req, res) => {
-  console.log("🚨🚨🚨 WEBHOOK CALLED! 🚨🚨🚨"); // YE LINE ADD KARO
-  console.log("📅 Time:", new Date().toLocaleString());
+  // console.log("🚨🚨🚨 WEBHOOK CALLED! 🚨🚨🚨"); // YE LINE ADD KARO
+  // console.log("📅 Time:", new Date().toLocaleString());
   const sig = req.headers["stripe-signature"];
   let event;
   
@@ -69,12 +69,12 @@ export const handleStripeWebhook = async (req, res) => {
 
   if (event.type === "payment_intent.succeeded") {
     const paymentIntent = event.data.object;
-    console.log("✅ PaymentIntent was successful!", paymentIntent);
+    // console.log("✅ PaymentIntent was successful!", paymentIntent);
     // 🧾 Save payment record
     const paymentExists = await Payment.findOne({
       transactionId: paymentIntent.id,
     });
-    console.log("🔍 Checking if payment exists:", paymentExists);
+    // console.log("🔍 Checking if payment exists:", paymentExists);
 
     if (!paymentExists) {
       await Payment.create({
@@ -137,7 +137,7 @@ export const handleStripeWebhook = async (req, res) => {
           }
         });
 
-        console.log("🆕 Created new subscription:", newSub);
+        // console.log("🆕 Created new subscription:", newSub);
         return res.status(200).json({ message: "Subscription created successfully" });
       }
 
@@ -191,7 +191,7 @@ export const handleStripeWebhook = async (req, res) => {
       });
 
 
-      console.log("🔄 Updated subscription:", updatedSub);
+      // console.log("🔄 Updated subscription:", updatedSub);
       return res.status(200).json({ message: "Subscription updated successfully" });
     } catch (err) {
       console.error("❌ MongoDB update failed:", err);

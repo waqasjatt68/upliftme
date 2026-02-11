@@ -1,9 +1,9 @@
 import React, { useEffect, useCallback, useState } from "react";
 import ReactPlayer from "react-player";
-import peer from "../services/Peer";
+import peer from "../../services/Peer";
 import { useNavigate } from "react-router-dom";
 
-import { useSocket } from "../context/SocketProvider";
+import { useSocket } from "../../context/SocketProvider";
 
 interface IncommingCall {
   from: string;
