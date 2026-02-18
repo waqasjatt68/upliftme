@@ -272,7 +272,7 @@
 
 import { toast } from "sonner";
 
-const API_BASE = "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_SERVER_URI || "http://localhost:4000";
 
 /* ===================== TYPES ===================== */
 
@@ -398,7 +398,13 @@ export async function findMatch(
 
     const user = await userRes.json();
     // Backend /api/user/me returns "username" (lowercase), not "userName"
-    const userId = user.id ?? user._id;
+    const rawUserId = user.id ?? user._id;
+    const userId =
+      rawUserId == null
+        ? ""
+        : typeof rawUserId === "string"
+          ? rawUserId
+          : (rawUserId as { toString?: () => string }).toString?.() ?? String(rawUserId);
     const userName = (user.userName ?? user.username ?? "").trim();
     console.log("[findMatch] ✅ User authenticated", { userId, userName });
 
@@ -492,14 +498,23 @@ function startPolling(userId: string, role: "hero" | "uplifter") {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ userId, role }),
+        body: JSON.stringify({ userId: String(userId), role }),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type");
+      const data =
+        contentType?.includes("application/json")
+          ? await res.json()
+          : { message: res.statusText || "Check match failed" };
 
       if (!res.ok) {
         if (res.status === 404) {
-          console.log("[findMatch] polling: user not in queue, stopping");
+          console.log("[findMatch] polling: user not in queue (404), stopping");
+          stopPolling();
+          return;
+        }
+        if (res.status === 401) {
+          console.warn("[findMatch] polling: unauthorized, stopping");
           stopPolling();
           return;
         }

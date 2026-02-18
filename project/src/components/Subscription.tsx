@@ -8,6 +8,7 @@ import {
 } from '@stripe/react-stripe-js';
 import { useSessionStore } from '../store/session';
 // import { Card, CardContent, Typography, Box, Chip } from "@mui/material";
+// const stripePromise = loadStripe(import.meta.env.STRIPE_SECRET_KEY || "");
 const stripePromise = loadStripe("pk_test_51SwzBiRt8kNCRZHOHRXHk8II9rDSpPxwrGnSkWzBzoqSWSvBjPlVSZAZj4g5hCrx9pjLZCsHBypxXBWElnrdKXsf00CLuudVg3");
 
 const CheckoutForm = ({
@@ -42,7 +43,8 @@ const CheckoutForm = ({
           planType: plan === 'weekly' ? 'weekly' : 'extended'
         };
 
-        const res = await fetch('http://localhost:4000/api/payments', {
+        const apiBase = import.meta.env.VITE_SERVER_URI || 'http://localhost:4000';
+        const res = await fetch(`${apiBase}/api/payments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

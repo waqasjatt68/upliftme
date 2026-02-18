@@ -39,11 +39,11 @@ export async function createCheckoutSession({
   paymentMethod: string;
 }) {
   try {
-    const res = await fetch("http://localhost:4000/api/payments", {
+    const apiBase = import.meta.env.VITE_SERVER_URI || "http://localhost:4000";
+    const res = await fetch(`${apiBase}/api/payments`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // Optionally add auth token if using middleware auth
       },
       body: JSON.stringify({ userId, amount, currency, paymentMethod }),
       credentials: "include"

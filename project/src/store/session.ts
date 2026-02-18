@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { findMatch, MatchedUser, cleanupPresence } from '../lib/matching';
-import { initializeDaily, cleanupDaily, initializeLocalVideo } from '../lib/daily';
+import { initializeVideo, cleanupVideo, initializeLocalVideo } from '../lib/twilio-video';
 import { toast } from 'sonner';
 // import socket from '../lib/socket';
 
@@ -314,7 +314,7 @@ const useSessionStore = create<SessionState>((set, get) => ({
     if (!sessionId) throw new Error("No active session");
 
     await initializeLocalVideo(container);
-    const client = await initializeDaily(container, sessionId);
+    const client = await initializeVideo(container, sessionId);
 
     set({ videoClient: client });
     return client;
@@ -328,7 +328,7 @@ const useSessionStore = create<SessionState>((set, get) => ({
 
     if (!sessionId) return;
 
-    if (videoClient) await cleanupDaily();
+    if (videoClient) await cleanupVideo();
     await cleanupPresence();
 
     await fetch(`http://localhost:4000/api/sessions/${sessionId}`, {
@@ -353,7 +353,7 @@ const useSessionStore = create<SessionState>((set, get) => ({
   /* -------- CANCEL MATCH (OLD BEHAVIOR) -------- */
   cancelMatch: async () => {
     await cleanupPresence();
-    await cleanupDaily();
+    await cleanupVideo();
 
     set({
       isActive: false,

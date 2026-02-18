@@ -132,9 +132,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
         return handleLogin(); // New user
       } else {
         await handleLogin();
-              setTimeout(() => {
-                document.location.href = '/dashboard';
-        }, 100);
+        // onSuccess() in WelcomeScreen will call onComplete() and show Dashboard — no redirect needed
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An error occurred";

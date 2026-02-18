@@ -8,6 +8,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import EmotionalSlider from './EmotionalSlider';
 
 const stripePromise = loadStripe("pk_test_51SwzBiRt8kNCRZHOHRXHk8II9rDSpPxwrGnSkWzBzoqSWSvBjPlVSZAZj4g5hCrx9pjLZCsHBypxXBWElnrdKXsf00CLuudVg3");
+// const stripePromise = loadStripe(import.meta.env.STRIPE_SECRET_KEY || "");
 
 
 interface SessionReviewProps {

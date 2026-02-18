@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import SessionReview from './SessionReview';
 import { toast } from 'sonner';
-import { toggleVideo, toggleAudio, setVolume, initializeLocalVideo } from '../lib/daily';
+import { toggleVideo, toggleAudio, setVolume, initializeLocalVideo } from '../lib/twilio-video';
 
 interface VideoSessionProps {
   onClose: () => void;
@@ -37,6 +37,8 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
   const [timerStarted, setTimerStarted] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const hasAttemptedInitRef = useRef(false);
+  const [activeReactions, setActiveReactions] = useState<Array<{ id: number; emoji: string }>>([]);
+  const reactionIdRef = useRef(0);
 
   // Debug: log when VideoSession mounts and when currentSession changes
   useEffect(() => {
@@ -111,18 +113,23 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
+      // Reset initialization flag on unmount so component can reinitialize if remounted
+      hasAttemptedInitRef.current = false;
+      // Clear active reactions
+      setActiveReactions([]);
     };
   }, []);
 
   const sendReaction = async (reaction: string) => {
     try {
-      // Show reaction animation
-      const reactionEl = document.createElement('div');
-      reactionEl.className = 'reaction-animation';
-      reactionEl.textContent = reaction;
-      videoContainerRef.current?.appendChild(reactionEl);
+      // Use React state instead of direct DOM manipulation
+      const reactionId = reactionIdRef.current++;
+      setActiveReactions(prev => [...prev, { id: reactionId, emoji: reaction }]);
       
-      setTimeout(() => reactionEl.remove(), 2000);
+      // Remove reaction after animation
+      setTimeout(() => {
+        setActiveReactions(prev => prev.filter(r => r.id !== reactionId));
+      }, 2000);
       
       // Hide reactions panel after sending
       setShowReactions(false);
@@ -401,13 +408,16 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
           </div>
 
           {/* Video Container */}
-          <div 
-            className="aspect-video bg-gray-900 relative" 
-            id="video-container" 
-            ref={videoContainerRef}
-          >
+          <div className="aspect-video bg-gray-900 relative">
+            {/* Twilio-managed video container - no React children here to avoid conflicts */}
+            <div 
+              className="absolute inset-0" 
+              id="video-container" 
+              ref={videoContainerRef}
+            />
+            {/* Waiting overlay - separate from Twilio container */}
             {isWaiting && (
-              <div className="absolute inset-0 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
                 <div className="text-center">
                   <Loader className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
                   <p className="text-white text-lg font-medium">
@@ -419,6 +429,24 @@ const VideoSession: React.FC<VideoSessionProps> = ({ onClose }) => {
                 </div>
               </div>
             )}
+            {/* Reaction animations - rendered as React children outside Twilio container */}
+            {activeReactions.map((reaction) => (
+              <div
+                key={reaction.id}
+                className="reaction-animation"
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  bottom: '100px',
+                  fontSize: '2rem',
+                  pointerEvents: 'none',
+                  zIndex: 50,
+                  transform: 'translateX(-50%)',
+                }}
+              >
+                {reaction.emoji}
+              </div>
+            ))}
           </div>
 
           {/* Controls */}

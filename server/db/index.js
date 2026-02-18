@@ -1,17 +1,21 @@
 import mongoose from "mongoose";
 import { DB_NAME } from "../constants.js";
+
 const connectDB = async () => {
     try {
-        // Use environment variable if available, otherwise use hardcoded values
-        const MONGODB_URI = process.env.MONGODB_URI || `mongodb://localhost:27017/${DB_NAME}?retryWrites=true&w=majority&connectTimeoutMS=30000`;
-        
-        const connectionInstance = await mongoose.connect(MONGODB_URI);
+        const MONGODB_URI = process.env.MONGODB_URI;
+        if (!MONGODB_URI || !MONGODB_URI.trim()) {
+            console.error("MONGODB_URI is not set in .env. Add MONGODB_URI to your server .env file.");
+            process.exit(1);
+        }
+        const uri = MONGODB_URI.trim();
+        const connectionInstance = await mongoose.connect(uri);
         console.log(`\n MongoDB connected !! DB HOST: ${connectionInstance.connection.host}`);
-        console.log(`Database Name: ${DB_NAME}`);
+        console.log(`Database Name: ${connectionInstance.connection.name || DB_NAME}`);
     } catch (error) {
         console.log("MONGODB connection FAILED ", error);
-        process.exit(1)
+        process.exit(1);
     }
-}
+};
 
 export default connectDB

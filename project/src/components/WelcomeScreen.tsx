@@ -76,19 +76,15 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
   };
 
   const handleSubscribe = async () => {
-    console.log("reaching here");
-
     if (!role) return;
     setLoading(true);
-    setLoadingMessage('Setting up your subscription...');
-    try {
-      await createCheckoutSession("price_monthly_subscription");
-    } catch (error) {
-      console.error('Subscription error:', error);
-    } finally {
+    setLoadingMessage('Taking you to subscribe...');
+    // Complete onboarding so user lands on app; they can complete payment on the Subscription page (requires login).
+    setTimeout(() => {
       setLoading(false);
       setLoadingMessage(null);
-    }
+      onComplete();
+    }, 800);
   };
 
   const handleComplete = () => {
@@ -161,7 +157,10 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
               <p className="text-sm text-gray-600 dark:text-gray-300">Quick, meaningful face-to-face conversations that fit your schedule</p>
             </div>
             <button
-              onClick={() => setStep(4)}
+              onClick={() => {
+                setRole('hero');
+                setStep(4);
+              }}
               className="w-full mt-4 py-3 px-4 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity"
             >
               Subscribe Now

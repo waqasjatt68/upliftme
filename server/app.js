@@ -16,9 +16,14 @@ import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import matchingRoutes from "./routes/matchingRoutes.js"
 import authMiddleware from "./middlewares/auth.middleware.js"
 import { AccessToken } from 'livekit-server-sdk'
+import twilio from 'twilio';
 import  verifySubscription  from "./middlewares/verifySubscription.middleware.js"; // Adjust the path as needed
 const apiKey = 'APItSDnBLzLn8Y4'; // Use your real API Key
-const apiSecret = 'BUT9ZQcHHWKto2YZjm7Wb4xiVbmhYfs0zc3dCvRdfRF'; // Use your real API Secret
+const apiSecret = 'N0PpdPK2UeIVrTse2gbd4GNDIQrZ1U4P'; // Use your real API Secret
+// Twilio Video (use env vars in production: TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_SECRET)
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || 'AC122a623d92ce90b6678467519142d53c';
+const TWILIO_API_KEY_SID = process.env.TWILIO_API_KEY_SID || 'SK76e1d498bc8b4ba6bb67918622c9ee00';
+const TWILIO_API_SECRET = process.env.TWILIO_API_SECRET || 'N0PpdPK2UeIVrTse2gbd4GNDIQrZ1U4P';
 import {
     handleStripeWebhook
 } from "./controllers/paymentController.js";
@@ -51,12 +56,12 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
-app.use("http://localhost:4000/api/verifyhook/webhook", bodyParser.raw({ type: "application/json" }));
-app.use("http://localhost:4000/api/verifyhook",((req, res,next)=>{
+app.use("/api/verifyhook/webhook", bodyParser.raw({ type: "application/json" }));
+app.use("/api/verifyhook",((req, res,next)=>{
   console.log("verifyhook middleware called");
   next()
 }), paymentRoutes);
-app.post("http://localhost:4000/api/payments/webhook", bodyParser.raw({type: "application/json"}), handleStripeWebhook);
+app.post("/api/payments/webhook", bodyParser.raw({type: "application/json"}), handleStripeWebhook);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -79,9 +84,36 @@ app.get("/", (req, res) => {
       referrals: "/api/referrals",
       subscriptions: "/api/subscriptions",
       token: "/api/token (POST)",
+      "get-twilio-token": "/api/get-twilio-token (POST)",
       matching:"/api/matching"
     }
   });
+});
+
+// Twilio Video token (must be before other /api routes so it's always registered)
+app.post('/api/get-twilio-token', authMiddleware, (req, res) => {
+  try {
+    const { identity, roomName } = req.body;
+    const id = identity || req.user?.username || req.user?.email || `user-${Date.now()}`;
+    const room = roomName || 'upliftme-room';
+
+    const AccessToken = twilio.jwt.AccessToken;
+    const VideoGrant = AccessToken.VideoGrant;
+
+    const token = new AccessToken(
+      TWILIO_ACCOUNT_SID,
+      TWILIO_API_KEY_SID,
+      TWILIO_API_SECRET,
+      { identity: id, ttl: 3600 }
+    );
+    const videoGrant = new VideoGrant({ room });
+    token.addGrant(videoGrant);
+
+    res.json({ token: token.toJwt() });
+  } catch (err) {
+    console.error('Twilio token error:', err);
+    res.status(500).json({ error: 'Failed to create video token' });
+  }
 });
 
 //Routes
@@ -115,6 +147,7 @@ app.post('/api/token', authMiddleware, verifySubscription, async(req, res) => {
   // Send the token back to the client
   res.json({ token });
 });
+
 app.use("/api/admin", adminRoutes);
 app.use("/api/sessions",authMiddleware, sessionRoutes);
 app.use("/api/flagged-users", authMiddleware, flaggedUserRoutes);

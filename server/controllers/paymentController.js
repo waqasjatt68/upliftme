@@ -2,14 +2,27 @@ import Payment from "../models/payment.model.js";
 import User from "../models/user.model.js";
 import Stripe from "stripe";
 import Subscription from "../models/subscription.model.js";
-import {PLAN_CONFIG} from "../constants.js"; 
-const endpointSecret = "whsec_720be1689a54e9df386b10b55440a16781463389f9d079cae7acf86b07a6eb39"; // Replace with your actual endpoint secret | account => acct_1RVskMP3JnQ5yfeS 
-const stripe = new Stripe('sk_test_51SwzBiRt8kNCRZHO9ndJgacR1AJQXjhQeMSOYcOXflzBDiGOtLTxHgcexQzVAQEKvjYexrDVlWLpsZyX3vlanZOH00Kn1vrJv1');
+import { PLAN_CONFIG } from "../constants.js";
+
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+if (!stripeSecretKey) {
+  console.warn("STRIPE_SECRET_KEY is not set in .env – payment features will fail.");
+}
+if (!stripeWebhookSecret) {
+  console.warn("STRIPE_WEBHOOK_SECRET is not set in .env – webhook verification will fail.");
+}
+
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey.trim()) : null;
 
 // Process a new payment using Stripe
 // import Subscription from "../models/Subscription.js";
 
 export const createPaymentIntent = async (req, res) => {
+  if (!stripe) {
+    return res.status(503).json({ message: "Payments are not configured. Set STRIPE_SECRET_KEY in .env." });
+  }
   try {
     const userId = req.user._id;
     const { planType } = req.body;
@@ -53,155 +66,128 @@ export const createPaymentIntent = async (req, res) => {
 };
 
 export const handleStripeWebhook = async (req, res) => {
-  // console.log("🚨🚨🚨 WEBHOOK CALLED! 🚨🚨🚨"); // YE LINE ADD KARO
-  // console.log("📅 Time:", new Date().toLocaleString());
   const sig = req.headers["stripe-signature"];
   let event;
-  
+
+  if (!stripe || !stripeWebhookSecret) {
+    console.error("Webhook skipped: Stripe or STRIPE_WEBHOOK_SECRET not configured.");
+    return res.status(503).send("Webhook not configured.");
+  }
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-
+    event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret.trim());
   } catch (err) {
     console.error("❌ Webhook signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  // Respond immediately so Stripe doesn't timeout (they expect < ~30s)
+  res.status(200).json({ received: true });
+
   if (event.type === "payment_intent.succeeded") {
     const paymentIntent = event.data.object;
-    // console.log("✅ PaymentIntent was successful!", paymentIntent);
-    // 🧾 Save payment record
-    const paymentExists = await Payment.findOne({
-      transactionId: paymentIntent.id,
-    });
-    // console.log("🔍 Checking if payment exists:", paymentExists);
 
-    if (!paymentExists) {
-      await Payment.create({
-        userId: paymentIntent.metadata.userId,
-        transactionId: paymentIntent.id,
-        amount: paymentIntent.amount_received / 100,
-        currency: paymentIntent.currency,
-        status: paymentIntent.status, // succeeded
-        planType: paymentIntent.metadata.planType,
-        paymentMethod: paymentIntent.payment_method_types?.[0] || "card"
-      });
+    setImmediate(async () => {
+      try {
+        const paymentExists = await Payment.findOne({
+          transactionId: paymentIntent.id,
+        });
 
-      console.log("💾 Payment saved in database");
-    } else {
-      console.log("⚠️ Payment already exists, skipping duplicate save");
-    // }
-
-
-    const userId = paymentIntent.metadata.userId;
-    const planType = paymentIntent.metadata.planType;
-    const bundleSize = parseInt(paymentIntent.metadata.bundleSize || "0");
-    const amountPaid = paymentIntent.amount_received / 100;
-
-    try {
-      const existingSub = await Subscription.findOne({ userId });
-      
-      // First-time subscription
-      if (!existingSub) {
-        if (planType === "extended") {
-          console.warn("❌ Cannot apply extended plan for first-time user");
-          return res.status(400).json({
-            message: "Extended plan requires an active weekly subscription first.",
+        if (!paymentExists) {
+          await Payment.create({
+            userId: paymentIntent.metadata.userId,
+            transactionId: paymentIntent.id,
+            amount: paymentIntent.amount_received / 100,
+            currency: paymentIntent.currency,
+            status: paymentIntent.status,
+            planType: paymentIntent.metadata.planType,
+            paymentMethod: paymentIntent.payment_method_types?.[0] || "card"
           });
+          console.log("💾 Payment saved in database");
+        } else {
+          console.log("⚠️ Payment already exists, skipping duplicate save");
         }
 
-        const newSub = new Subscription({
-          userId,
-          totalSpent: amountPaid,
-          lastUpdated: new Date(),
-          hasWeeklySubscription: planType === "weekly",
-          sessionBalance: planType === "weekly" ? bundleSize : 0,
-          weeklyExpiresAt: planType === "weekly" 
-            ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) 
-            : null,
-          purchasedBundles: [
-            {
-              bundleSize,
-              amountPaid,
-            },
-          ],
-        });
-        
+        const userId = paymentIntent.metadata.userId;
+        const planType = paymentIntent.metadata.planType;
+        const bundleSize = parseInt(paymentIntent.metadata.bundleSize || "0");
+        const amountPaid = paymentIntent.amount_received / 100;
 
-        await newSub.save();
+        const existingSub = await Subscription.findOne({ userId });
+
+        if (!existingSub) {
+          if (planType === "extended") {
+            console.warn("❌ Cannot apply extended plan for first-time user");
+            return;
+          }
+
+          const newSub = new Subscription({
+            userId,
+            totalSpent: amountPaid,
+            lastUpdated: new Date(),
+            hasWeeklySubscription: planType === "weekly",
+            sessionBalance: planType === "weekly" ? bundleSize : 0,
+            weeklyExpiresAt: planType === "weekly"
+              ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+              : null,
+            purchasedBundles: [
+              { bundleSize, amountPaid },
+            ],
+          });
+
+          await newSub.save();
+          await User.findByIdAndUpdate(userId, {
+            $set: {
+              "subscription.sessionBalance": newSub.sessionBalance,
+              "subscription.specialKeyAccess": newSub.hasExtendedSubscription || false,
+              "subscription.purchasedBundles": newSub.purchasedBundles
+            }
+          });
+          console.log("🆕 Created new subscription");
+          return;
+        }
+
+        const updateFields = {
+          $inc: { totalSpent: amountPaid },
+          $set: { lastUpdated: new Date() },
+          $push: { purchasedBundles: { bundleSize, amountPaid } },
+        };
+
+        if (planType === "weekly") {
+          updateFields.$set.hasWeeklySubscription = true;
+          updateFields.$set.sessionBalance = bundleSize;
+          updateFields.$set.weeklyExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        }
+
+        if (planType === "extended") {
+          if (existingSub.hasWeeklySubscription && existingSub.sessionBalance <= 0) {
+            updateFields.$set.hasExtendedSubscription = true;
+            updateFields.$inc.sessionBalance = bundleSize;
+          } else {
+            console.warn("⛔ User not eligible for extended plan purchase");
+            return;
+          }
+        }
+
+        const updatedSub = await Subscription.findOneAndUpdate(
+          { userId },
+          updateFields,
+          { upsert: true, new: true }
+        );
         await User.findByIdAndUpdate(userId, {
           $set: {
-            "subscription.sessionBalance": newSub.sessionBalance,
-            "subscription.specialKeyAccess": newSub.hasExtendedSubscription || false,
-            "subscription.purchasedBundles": newSub.purchasedBundles
+            "subscription.sessionBalance": updatedSub.sessionBalance,
+            "subscription.specialKeyAccess": updatedSub.hasExtendedSubscription || false,
+            "subscription.purchasedBundles": updatedSub.purchasedBundles
           }
         });
-
-        // console.log("🆕 Created new subscription:", newSub);
-        return res.status(200).json({ message: "Subscription created successfully" });
+        console.log("🔄 Updated subscription");
+      } catch (err) {
+        console.error("❌ Webhook processing failed:", err);
       }
-
-      // Existing subscription update
-      const updateFields = {
-        $inc: {
-          totalSpent: amountPaid,
-        },
-        $set: {
-          lastUpdated: new Date(),
-        },
-        $push: {
-          purchasedBundles: {
-            bundleSize,
-            amountPaid,
-          },
-        },
-      };
-
-      // Weekly Plan
-      if (planType === "weekly") {
-        updateFields.$set.hasWeeklySubscription = true;
-        updateFields.$set.sessionBalance = bundleSize;
-        updateFields.$set.weeklyExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      }
-
-      // Extended Plan
-      if (planType === "extended") {
-        if (existingSub.hasWeeklySubscription && existingSub.sessionBalance <= 0) {
-          updateFields.$set.hasExtendedSubscription = true;
-          updateFields.$inc.sessionBalance = bundleSize;
-        } else {
-          console.warn("⛔ User not eligible for extended plan purchase");
-          return res.status(400).json({
-            message: "Cannot purchase extended plan. Weekly plan not active or sessions remaining.",
-          });
-        }
-      }
-
-      const updatedSub = await Subscription.findOneAndUpdate(
-        { userId },
-        updateFields,
-        { upsert: true, new: true }
-      );
-      await User.findByIdAndUpdate(userId, {
-        $set: {
-          "subscription.sessionBalance": updatedSub.sessionBalance,
-          "subscription.specialKeyAccess": updatedSub.hasExtendedSubscription || false,
-          "subscription.purchasedBundles": updatedSub.purchasedBundles
-        }
-      });
-
-
-      // console.log("🔄 Updated subscription:", updatedSub);
-      return res.status(200).json({ message: "Subscription updated successfully" });
-    } catch (err) {
-      console.error("❌ MongoDB update failed:", err);
-      return res.status(500).json({ message: "MongoDB update error" });
-    }
+    });
   }
-
-  res.json({ received: true });
 };
-}
 
 export const getAllPayments = async (req, res) => {
     try {

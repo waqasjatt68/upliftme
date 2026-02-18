@@ -884,10 +884,8 @@ const Dashboard: React.FC = () => {
         </div>
       </nav>
 
-      {/* Video Session Modal */}
-      <AnimatePresence>
-        {showVideoSession && <VideoSession onClose={handleCloseSession} />}
-      </AnimatePresence>
+      {/* Video Session Modal - no AnimatePresence: Twilio owns DOM inside, exit animation causes removeChild errors */}
+      {showVideoSession && <VideoSession onClose={handleCloseSession} />}
 
       {/* Match Found Modal */}
       <AnimatePresence>

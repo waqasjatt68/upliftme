@@ -21,19 +21,24 @@ const TwilioVideoCall = () => {
     };
   }, [room]);
 
-  // Helper function to get a token from your backend
-  const getToken = async (identity: string): Promise<string> => {
+  const API_BASE = import.meta.env.VITE_SERVER_URI || 'http://localhost:4000';
+
+  // Helper function to get a token from your backend (uses Twilio API keys on server)
+  const getToken = async (identity: string, roomName?: string): Promise<string> => {
     try {
-      // In production, you should have a server endpoint that generates tokens
-      // This is just a placeholder - you need to implement this on your backend
-      const response = await fetch('/api/get-twilio-token', {
+      const response = await fetch(`${API_BASE}/api/get-twilio-token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ identity }),
+        credentials: 'include',
+        body: JSON.stringify({ identity, roomName }),
       });
 
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Token request failed: ${response.status}`);
+      }
       const data = await response.json();
       return data.token;
     } catch (error) {
@@ -93,9 +98,9 @@ const TwilioVideoCall = () => {
       setConnecting(true);
       setStatus('connecting');
 
-      // Get token from your backend
+      // Get token from your backend (Twilio credentials on server)
       const identity = `user-${Math.floor(Math.random() * 1000)}`;
-      const token = await getToken(identity);
+      const token = await getToken(identity, roomName);
 
       // Connect to room
       const newRoom = await connect(token, {

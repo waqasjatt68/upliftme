@@ -36,7 +36,10 @@ function cleanupOldEntries() {
  */
 export const findMatch = async (req, res) => {
   try {
-    const { userId, role, userName } = req.body;
+    const raw = req.body;
+    const userId = raw.userId != null ? String(raw.userId) : "";
+    const role = raw.role;
+    const userName = (raw.userName || "").trim();
 
     console.log("\n🔍 ========== FIND MATCH ==========");
     console.log("   User ID:", userId);
@@ -122,7 +125,14 @@ export const findMatch = async (req, res) => {
 export const checkMatch = async (req, res) => {
   try {
     const { userId, role } = req.body;
-    const userIdStr = String(userId);
+    const userIdStr = userId != null ? String(userId) : "";
+
+    if (!userIdStr || !role) {
+      return res.status(400).json({
+        message: "userId and role are required",
+        match: null,
+      });
+    }
 
     // Clean up old entries
     cleanupOldEntries();
