@@ -82,6 +82,7 @@ import Session from "../models/session.model.js";
 import User from "../models/user.model.js";
 
 // CREATE SESSION
+// Uses find-one-or-create so hero and uplifter both get the SAME session (same ID → same Twilio room)
 export const createSession = async (req, res) => {
   try {
     const { heroId, uplifterId, initialMood, paymentStatus } = req.body;
@@ -97,7 +98,22 @@ export const createSession = async (req, res) => {
       return res.status(404).json({ message: "Hero or Uplifter not found" });
     }
 
-    const session = await Session.create({
+    // Find existing ongoing session for this pair (hero+uplifter or uplifter+hero)
+    let session = await Session.findOne({
+      status: "ongoing",
+      $or: [
+        { heroId, uplifterId },
+        { heroId: uplifterId, uplifterId: heroId },
+      ],
+    });
+
+    if (session) {
+      // Return existing session so both users join same Twilio room (session-{id})
+      res.status(200).json(session);
+      return;
+    }
+
+    session = await Session.create({
       heroId,
       uplifterId,
       initialMood,

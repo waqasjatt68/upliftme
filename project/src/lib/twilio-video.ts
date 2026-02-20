@@ -131,6 +131,9 @@ export async function initializeVideo(container: HTMLElement, sessionId: string)
   remoteVideoEl.playsInline = true;
   remoteVideoEl.className = 'video-session-remote';
   remoteVideoEl.setAttribute('playsinline', 'true');
+  remoteVideoEl.srcObject = null;
+  remoteVideoEl.setAttribute('data-role', 'remote');
+  remoteVideoEl.style.opacity = '0'; // hidden until remote track attaches (stops local showing in main area)
   remoteWrap.appendChild(remoteVideoEl);
 
   // Create local video container and element
@@ -150,20 +153,20 @@ export async function initializeVideo(container: HTMLElement, sessionId: string)
   
   console.log('[Twilio] Video elements created and added to DOM');
 
-  // Attach local participant's video track
+  // Attach local participant's video track ONLY to localV (PIP). Never to remoteVideoEl.
   room.localParticipant.tracks.forEach((pub: LocalTrackPublication) => {
     if (pub.track?.kind === 'video') {
       pub.track.attach(localV);
-      console.log('[Twilio] Local video track attached');
+      console.log('[Twilio] Local video track attached to local PIP only');
       localV.play().catch(err => console.warn('[Twilio] Failed to play local video:', err));
     }
   });
 
-  // Also listen for local track publications
+  // Also listen for local track publications – only ever attach to localV
   room.localParticipant.on('trackPublished', (publication: LocalTrackPublication) => {
     if (publication.track?.kind === 'video') {
       publication.track.attach(localV);
-      console.log('[Twilio] Local video track published and attached');
+      console.log('[Twilio] Local video track published and attached to local PIP only');
       localV.play().catch(err => console.warn('[Twilio] Failed to play local video:', err));
     }
   });
@@ -173,6 +176,7 @@ export async function initializeVideo(container: HTMLElement, sessionId: string)
     if (track.kind === 'video' && remoteVideoEl) {
       try {
         track.attach(remoteVideoEl);
+        remoteVideoEl.style.opacity = '1'; // show only when we have a real remote track
         console.log('[Twilio] Remote video track attached to element');
         // Force play in case autoplay is blocked
         remoteVideoEl.play().catch(err => console.warn('[Twilio] Failed to play remote video:', err));
@@ -209,6 +213,7 @@ export async function initializeVideo(container: HTMLElement, sessionId: string)
           try {
             // Try to attach - attach() is idempotent, safe to call multiple times
             pub.track.attach(remoteVideoEl!);
+            remoteVideoEl!.style.opacity = '1'; // show only when we have a real remote track
             console.log('[Twilio] ✓ Attached remote video track from:', p.identity);
             remoteVideoEl!.play().catch(err => console.warn('[Twilio] Failed to play remote video:', err));
           } catch (err) {

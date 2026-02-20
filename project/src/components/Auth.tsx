@@ -8,12 +8,13 @@ const API_BASE_URL = import.meta.env.VITE_SERVER_URI || "https://www.upliftmee.c
 
 interface AuthProps {
   onSuccess: (isNewUser: boolean) => void;
+  initialLoginMode?: boolean;
 }
 
 
-const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
+const Auth: React.FC<AuthProps> = ({ onSuccess, initialLoginMode = false }) => {
   const socket = useSocket();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(!initialLoginMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

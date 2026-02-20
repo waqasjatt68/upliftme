@@ -250,6 +250,7 @@ const useSessionStore = create<SessionState>((set, get) => ({
         currentSession: session,
         isActive: true,
         isSearching: false,
+        timeRemaining: 7 * 60,
       });
 
       toast.success("Session started 🎉");
@@ -297,6 +298,7 @@ const useSessionStore = create<SessionState>((set, get) => ({
         currentSession: session,
         isActive: true,
         isSearching: false,
+        timeRemaining: 7 * 60,
       });
       toast.success("Match found! Session started 🎉");
     } catch (error) {

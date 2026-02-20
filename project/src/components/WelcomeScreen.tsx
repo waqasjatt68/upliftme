@@ -22,9 +22,11 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
   const [role, setRole] = useState<'hero' | 'uplifter' | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
+  const [showLoginAfterProfile, setShowLoginAfterProfile] = useState(false);
 
   const handleRoleSelect = (selectedRole: 'hero' | 'uplifter') => {
     setLoading(true);
+    setShowLoginAfterProfile(false);
     setTimeout(() => {
       setRole(selectedRole);
       setStep(2);
@@ -46,7 +48,10 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
   const handleBack = () => {
     setLoading(true);
     setTimeout(() => {
-      if (step > 1) setStep(step - 1);
+      if (step > 1) {
+        setStep(step - 1);
+        if (step === 2) setShowLoginAfterProfile(false);
+      }
       setLoading(false);
     }, 300);
   };
@@ -65,14 +70,23 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
     }, 800);
   };
 
-  const handleProfileComplete = () => {
+  const handleProfileComplete = async () => {
     setLoading(true);
-    setLoadingMessage('Finalizing profile...');
-    setTimeout(() => {
-      handleComplete();
+    setLoadingMessage('Profile created! Redirecting to login...');
+    try {
+      localStorage.clear();
+      await fetch('http://localhost:4000/api/user/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      await new Promise((r) => setTimeout(r, 2500));
+      setShowLoginAfterProfile(true);
+      setStep(2);
+    } finally {
       setLoading(false);
       setLoadingMessage(null);
-    }, 1000);
+    }
   };
 
   const handleSubscribe = async () => {
@@ -170,7 +184,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
       case 2:
         return (
           <Suspense fallback={<LoadingFallback message="Loading authentication..." />}>
-            <Auth onSuccess={handleAuthSuccess} />
+            <Auth onSuccess={handleAuthSuccess} initialLoginMode={showLoginAfterProfile} />
           </Suspense>
         );
       case 3:
